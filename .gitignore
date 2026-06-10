@@ -1,0 +1,8 @@
+.DS_Store
+*.xlsx
+.venv/
+__pycache__/
+*.pyc
+.env
+web/dist/
+node_modules/
