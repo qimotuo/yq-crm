@@ -1,0 +1,38 @@
+name: yq-crm
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: yq-crm-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?请在 .env 中配置 DATABASE_URL}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-yq-crm-docker-secret-change-me}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
+      DEBUG: ${DEBUG:-false}
+      TZ: Asia/Shanghai
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        VITE_USE_MOCK: "false"
+        VITE_API_BASE: /api
+    container_name: yq-crm-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy

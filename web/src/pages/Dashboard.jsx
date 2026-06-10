@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Row, Col, Card, Statistic, Table, Tag, List, Badge, Button } from 'antd'
 import { useNavigate } from 'react-router-dom'
-import { FileTextOutlined, ClockCircleOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, CalendarOutlined } from '@ant-design/icons'
+import { FileTextOutlined, ClockCircleOutlined, CheckCircleOutlined, TeamOutlined, DollarOutlined, CalendarOutlined, FileProtectOutlined, MessageOutlined } from '@ant-design/icons'
 import { getDashboardStats } from '../api'
 import { getWorkOrders } from '../api/workOrder'
 import { OrderStatusTag } from '../components/StatusTag'
@@ -43,6 +43,10 @@ export default function Dashboard() {
         <Col xs={24} sm={12} lg={8}><Card className="stat-card"><Statistic title="本月应收" value={stats?.monthlyRevenue || 0} prefix={<DollarOutlined />} formatter={formatMoney} /></Card></Col>
         <Col xs={24} sm={12} lg={8}><Card className="stat-card"><Statistic title="未收金额" value={stats?.unpaidAmount || 0} prefix={<DollarOutlined />} valueStyle={{ color: '#faad14' }} formatter={formatMoney} /></Card></Col>
         <Col xs={24} sm={12} lg={8}><Card className="stat-card"><Statistic title="今日日程" value={stats?.todaySchedules || 0} prefix={<CalendarOutlined />} valueStyle={{ color: '#722ed1' }} suffix="项" /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className="stat-card"><Statistic title="合同总数" value={stats?.contractCount || 0} prefix={<FileProtectOutlined />} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className="stat-card"><Statistic title="跟进记录" value={stats?.followUpCount || 0} prefix={<MessageOutlined />} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className="stat-card"><Statistic title="公海客户" value={stats?.publicPoolCount || 0} prefix={<TeamOutlined />} valueStyle={{ color: '#9254de' }} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card className="stat-card"><Statistic title="库存预警" value={stats?.lowStockCount || 0} prefix={<ClockCircleOutlined />} valueStyle={{ color: '#fa8c16' }} suffix="项" /></Card></Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
@@ -69,7 +73,7 @@ export default function Dashboard() {
         </Col>
       </Row>
 
-      <DashboardCharts />
+      <DashboardCharts monthlyTrends={stats?.monthlyTrends} />
     </div>
   )
 }

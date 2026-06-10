@@ -1,16 +1,8 @@
 import { Card, Row, Col } from 'antd'
 import { formatMoney } from '../utils/helpers'
 
-const chartData = [
-  { month: '7月', orders: 18, revenue: 42000 },
-  { month: '8月', orders: 22, revenue: 51000 },
-  { month: '9月', orders: 25, revenue: 58000 },
-  { month: '10月', orders: 30, revenue: 65000 },
-  { month: '11月', orders: 28, revenue: 87000 },
-]
-
-export default function SimpleBarChart({ title, dataKey, format }) {
-  const max = Math.max(...chartData.map((d) => d[dataKey]))
+export default function SimpleBarChart({ title, dataKey, format, chartData = [] }) {
+  const max = Math.max(...chartData.map((d) => d[dataKey]), 1)
 
   return (
     <Card title={title} size="small">
@@ -35,14 +27,14 @@ export default function SimpleBarChart({ title, dataKey, format }) {
   )
 }
 
-export function DashboardCharts() {
+export function DashboardCharts({ monthlyTrends = [] }) {
   return (
     <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
       <Col xs={24} lg={12}>
-        <SimpleBarChart title="月度工单趋势" dataKey="orders" />
+        <SimpleBarChart title="月度工单趋势" dataKey="orders" chartData={monthlyTrends} />
       </Col>
       <Col xs={24} lg={12}>
-        <SimpleBarChart title="月度应收趋势" dataKey="revenue" format={formatMoney} />
+        <SimpleBarChart title="月度应收趋势" dataKey="revenue" format={formatMoney} chartData={monthlyTrends} />
       </Col>
     </Row>
   )

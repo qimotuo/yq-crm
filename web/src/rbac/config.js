@@ -27,7 +27,8 @@ export const MENU_TREE = [
     key: 'install', label: '安装运维', group: '运维',
     children: [
       { key: '/dispatch', label: '派工管理' },
-      { key: '/install-register', label: '安装登记' },
+      { key: '/install-register', label: '我的工单' },
+      { key: '/work-order-query', label: '工单查询' },
     ],
   },
   {
@@ -45,6 +46,8 @@ export const MENU_TREE = [
     children: [
       { key: '/system/users', label: '用户管理' },
       { key: '/system/roles', label: '角色权限' },
+      { key: '/system/notifications', label: '消息通知' },
+      { key: '/system/logs', label: '操作日志' },
     ],
   },
 ]
@@ -60,6 +63,9 @@ export const OPERATION_GROUPS = [
       { code: 'system:user:delete', label: '删除用户' },
       { code: 'system:role:view', label: '查看角色' },
       { code: 'system:role:edit', label: '配置角色权限' },
+      { code: 'system:log:view', label: '查看操作日志' },
+      { code: 'system:notify:view', label: '查看消息通知' },
+      { code: 'system:notify:send', label: '发送消息通知' },
     ],
   },
   {
@@ -127,12 +133,12 @@ export const DEFAULT_ROLES = [
   {
     id: 2, name: '销售', code: 'sales', userCount: 3,
     menuKeys: ['/dashboard', '/public-pool', '/my-customers', '/contacts', '/follow-ups', '/schedules', '/work-orders', '/stock', '/customers'],
-    operations: ['customer:view', 'customer:import', 'customer:claim', 'customer:return', 'customer:follow', 'customer:call', 'workorder:view', 'workorder:create', 'workorder:edit', 'workorder:delete', 'workorder:print', 'stock:view', 'stock:out'],
+    operations: ['customer:view', 'customer:create', 'customer:import', 'customer:claim', 'customer:return', 'customer:follow', 'customer:call', 'workorder:view', 'workorder:create', 'workorder:edit', 'workorder:delete', 'workorder:print', 'stock:view', 'stock:out'],
     dataScope: 'SELF', enabled: true,
   },
   {
     id: 3, name: '安装人员', code: 'installer', userCount: 3,
-    menuKeys: ['/dashboard', '/dispatch', '/install-register', '/stock'],
+    menuKeys: ['/dashboard', '/install-register', '/stock'],
     operations: ['workorder:view', 'workorder:install', 'stock:view'],
     dataScope: 'ASSIGNED', enabled: true,
   },

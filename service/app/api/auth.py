@@ -1,6 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
+from app.core.audit import log_action
 from app.core.deps import get_current_user
 from app.core.response import ok
 from app.db.models import User
@@ -12,8 +13,11 @@ router = APIRouter(prefix="/auth", tags=["认证"])
 
 
 @router.post("/login")
-def auth_login(body: LoginRequest, db: Session = Depends(get_db)):
-    return ok(login(db, body.username, body.password))
+def auth_login(body: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    result = login(db, body.username, body.password)
+    user = db.query(User).filter(User.username == body.username).first()
+    log_action(db, user, "login", "系统", f"用户 {body.username} 登录成功", request=request)
+    return ok(result)
 
 
 @router.get("/me")

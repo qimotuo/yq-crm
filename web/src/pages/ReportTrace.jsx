@@ -6,6 +6,7 @@ import { traceQuery } from '../api'
 const traceTypes = [
   { value: 'mac', label: 'MAC 地址', placeholder: 'AA:BB:CC:DD:EE:01' },
   { value: 'iccid', label: 'SIM 卡号(ICCID)', placeholder: '89860123456789012345' },
+  { value: 'customer', label: '客户名称', placeholder: '智慧社区A区物业' },
   { value: 'orderNo', label: '工单号', placeholder: 'GD-20261025-088' },
   { value: 'contractNo', label: '合同号', placeholder: 'SH20261105001' },
 ]
@@ -33,7 +34,7 @@ export default function ReportTrace() {
     <div>
       <div className="page-header">
         <h2>全链路追溯</h2>
-        <p>输入 MAC / SIM / 工单号 / 合同号，查看完整业务链路</p>
+        <p>输入 MAC / SIM / 客户 / 工单号 / 合同号，查看完整业务链路</p>
       </div>
 
       <Card style={{ marginBottom: 24 }}>
@@ -45,7 +46,7 @@ export default function ReportTrace() {
           <Button type="primary" loading={loading} onClick={handleSearch}>追溯查询</Button>
         </Space>
         <div style={{ marginTop: 12, color: '#999', fontSize: 12 }}>
-          演示快捷输入：GD-20261025-088 / AA:BB:CC / 89860123456789012345 / SH20261105001
+          演示快捷输入：智慧社区 / GD-20261025-088 / AA:BB:CC / 898601 / SH20261105001
         </div>
       </Card>
 

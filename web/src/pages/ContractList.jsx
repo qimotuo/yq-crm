@@ -3,6 +3,7 @@ import { Table, Button, Space, Input, Select, Tag, Modal, Descriptions, message 
 import { SearchOutlined, PrinterOutlined, FileAddOutlined } from '@ant-design/icons'
 import { getContracts, generateContract } from '../api'
 import { formatMoney } from '../utils/helpers'
+import ContractPrint from '../components/ContractPrint'
 
 export default function ContractList() {
   const [loading, setLoading] = useState(false)
@@ -10,6 +11,7 @@ export default function ContractList() {
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [detail, setDetail] = useState(null)
+  const [printContract, setPrintContract] = useState(null)
 
   const load = async () => {
     setLoading(true)
@@ -44,7 +46,7 @@ export default function ContractList() {
     { title: '合同周期', width: 200, render: (_, r) => `${r.startDate} ~ ${r.endDate}` },
     { title: '状态', dataIndex: 'status', width: 100, render: (s) => <Tag color={statusColor[s]}>{s}</Tag> },
     {
-      title: '操作', width: 180, fixed: 'right',
+      title: '操作', width: 200, fixed: 'right',
       render: (_, r) => (
         <Space size="small">
           <Button type="link" size="small" onClick={() => setDetail(r)}>查看</Button>
@@ -52,7 +54,7 @@ export default function ContractList() {
             <Button type="link" size="small" icon={<FileAddOutlined />} onClick={() => handleGenerate(r.orderNo)}>生成合同</Button>
           )}
           {r.status !== '待生成' && (
-            <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => { setDetail(r); message.info('演示：打开打印对话框') }}>打印</Button>
+            <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => setPrintContract(r)}>打印</Button>
           )}
         </Space>
       ),
@@ -89,6 +91,8 @@ export default function ContractList() {
           </Descriptions>
         )}
       </Modal>
+
+      <ContractPrint contract={printContract} onClose={() => setPrintContract(null)} />
     </div>
   )
 }

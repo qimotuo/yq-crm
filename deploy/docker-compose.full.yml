@@ -1,0 +1,65 @@
+# 本地全套（含 PostgreSQL），用法: ./start.sh full
+
+name: yq-crm
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: yq-crm-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-yqcrm}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yqcrm}
+      POSTGRES_DB: ${POSTGRES_DB:-yq_crm}
+      TZ: Asia/Shanghai
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: yq-crm-api
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-yqcrm}:${POSTGRES_PASSWORD:-yqcrm}@db:5432/${POSTGRES_DB:-yq_crm}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-yq-crm-docker-secret-change-me}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
+      DEBUG: ${DEBUG:-false}
+      TZ: Asia/Shanghai
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        VITE_USE_MOCK: "false"
+        VITE_API_BASE: /api
+    container_name: yq-crm-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-8080}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:

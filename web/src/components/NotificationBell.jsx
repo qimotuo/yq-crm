@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { Badge, Dropdown, List, Tag, Empty } from 'antd'
 import { BellOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { getNotifications, markNotificationRead } from '../api'
+import { getNotifications, markNotificationRead } from '../api/notify'
 
-const typeColor = { 工单: 'blue', 财务: 'gold', 库存: 'orange', 日程: 'purple', 合同: 'cyan', 付费: 'red' }
+const typeColor = { 工单: 'blue', 财务: 'gold', 库存: 'orange', 日程: 'purple', 合同: 'cyan', 付费: 'red', 系统: 'default' }
 
 export default function NotificationBell() {
   const [unread, setUnread] = useState(0)

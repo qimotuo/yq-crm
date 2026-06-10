@@ -4,7 +4,8 @@ import {
   DashboardOutlined, FileTextOutlined, SendOutlined, TeamOutlined, DollarOutlined,
   InboxOutlined, UserOutlined, LogoutOutlined, GlobalOutlined, FormOutlined,
   LinkOutlined, SearchOutlined, SettingOutlined, UserSwitchOutlined, CalendarOutlined,
-  ContactsOutlined, SafetyOutlined, FileProtectOutlined, HistoryOutlined, DatabaseOutlined,
+  ContactsOutlined,   SafetyOutlined, FileProtectOutlined, HistoryOutlined, DatabaseOutlined, FileSearchOutlined,
+  BellOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSelector } from 'react-redux'
@@ -35,6 +36,7 @@ const ICON_MAP = {
   '/stock': <InboxOutlined />,
   '/dispatch': <SendOutlined />,
   '/install-register': <FormOutlined />,
+  '/work-order-query': <FileSearchOutlined />,
   '/customers': <TeamOutlined />,
   '/finance': <DollarOutlined />,
   '/contracts': <FileProtectOutlined />,
@@ -42,6 +44,8 @@ const ICON_MAP = {
   '/report-trace': <SearchOutlined />,
   '/system/users': <SettingOutlined />,
   '/system/roles': <SafetyOutlined />,
+  '/system/notifications': <BellOutlined />,
+  '/system/logs': <FileSearchOutlined />,
 }
 
 function toMenuItems(tree) {

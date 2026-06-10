@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Table, Button, Space, Input, Select, Modal, Form, DatePicker, message, Popconfirm, Descriptions } from 'antd'
 import { PlusOutlined, SearchOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons'
 import { getWorkOrders, createWorkOrder, deleteWorkOrder, updateWorkOrder } from '../api/workOrder'
@@ -17,6 +18,8 @@ export default function WorkOrderList() {
   const [current, setCurrent] = useState(null)
   const [printOpen, setPrintOpen] = useState(false)
   const [form] = Form.useForm()
+  const location = useLocation()
+  const prefillDone = useRef(false)
 
   const load = async () => {
     setLoading(true)
@@ -32,6 +35,15 @@ export default function WorkOrderList() {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    const prefill = location.state?.prefill
+    if (prefill && !prefillDone.current) {
+      prefillDone.current = true
+      form.setFieldsValue(prefill)
+      setModalOpen(true)
+    }
+  }, [location.state, form])
 
   const openCreate = () => { setEditing(null); form.resetFields(); setModalOpen(true) }
 

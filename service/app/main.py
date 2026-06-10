@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api import agent, auth, dashboard, system, work_orders
+from app.api import agent, auth, customers, dashboard, notifications, schedules, system, work_orders
 from app.core.config import settings
 from app.core.exceptions import BizError
 from app.core.response import fail
@@ -38,5 +38,5 @@ def health():
     return {"status": "ok"}
 
 
-for mod in (auth, dashboard, work_orders, agent, system):
+for mod in (auth, dashboard, work_orders, customers, agent, system, notifications, schedules):
     app.include_router(mod.router, prefix=settings.api_prefix)

@@ -11,6 +11,7 @@ import StockList from './pages/StockList'
 import PublicPoolList from './pages/PublicPoolList'
 import MyCustomerList from './pages/MyCustomerList'
 import InstallRegister from './pages/InstallRegister'
+import WorkOrderQuery from './pages/WorkOrderQuery'
 import IntegratedQuery from './pages/IntegratedQuery'
 import ReportTrace from './pages/ReportTrace'
 import SystemUserList from './pages/SystemUserList'
@@ -21,8 +22,11 @@ import ContractList from './pages/ContractList'
 import PoolConfig from './pages/PoolConfig'
 import FollowUpList from './pages/FollowUpList'
 import Profile from './pages/Profile'
+import OperationLogList from './pages/OperationLogList'
+import NotificationManage from './pages/NotificationManage'
 import './api/rbac'
 import './api/index'
+import './api/notify'
 import './api/workOrder'
 
 function Guard({ path, children }) {
@@ -40,6 +44,7 @@ function App() {
           <Route path="work-orders" element={<Guard path="/work-orders"><WorkOrderList /></Guard>} />
           <Route path="dispatch" element={<Guard path="/dispatch"><DispatchList /></Guard>} />
           <Route path="install-register" element={<Guard path="/install-register"><InstallRegister /></Guard>} />
+          <Route path="work-order-query" element={<Guard path="/work-order-query"><WorkOrderQuery /></Guard>} />
           <Route path="public-pool" element={<Guard path="/public-pool"><PublicPoolList /></Guard>} />
           <Route path="pool-config" element={<Guard path="/pool-config"><PoolConfig /></Guard>} />
           <Route path="my-customers" element={<Guard path="/my-customers"><MyCustomerList /></Guard>} />
@@ -54,6 +59,8 @@ function App() {
           <Route path="report-trace" element={<Guard path="/report-trace"><ReportTrace /></Guard>} />
           <Route path="system/users" element={<Guard path="/system/users"><SystemUserList /></Guard>} />
           <Route path="system/roles" element={<Guard path="/system/roles"><RoleList /></Guard>} />
+          <Route path="system/notifications" element={<Guard path="/system/notifications"><NotificationManage /></Guard>} />
+          <Route path="system/logs" element={<Guard path="/system/logs"><OperationLogList /></Guard>} />
           <Route path="profile" element={<Profile />} />
         </Route>
       </Routes>
