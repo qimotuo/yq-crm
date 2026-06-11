@@ -165,6 +165,64 @@ def delete_order(
     return ok(True)
 
 
+@router.get("/installations/detail")
+def get_installation_detail(
+    id: int,
+    _: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("workorder:view", "workorder:install")),
+):
+    return ok(svc.get_installation(id))
+
+
+@router.post("/installations")
+def create_installation(
+    body: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("workorder:install")),
+):
+    item = svc.create_installation(body, operator=user.name)
+    log_action(db, user, "create", "安装登记", f"新增 {item['orderNo']}", request=request)
+    return ok(item)
+
+
+@router.put("/installations/update")
+def update_installation(
+    body: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("workorder:install")),
+):
+    oid = body.pop("id")
+    is_admin = user.role_code == "admin"
+    item = svc.update_installation(oid, body, operator=user.name, is_admin=is_admin)
+    log_action(db, user, "update", "安装登记", f"修改 {item['orderNo']}", request=request)
+    return ok(item)
+
+
+@router.get("/installations/search")
+def search_installations(
+    request: Request,
+    customerName: str = "",
+    storeName: str = "",
+    installDate: str = "",
+    mac: str = "",
+    imei: str = "",
+    iccid: str = "",
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("workorder:view", "workorder:install")),
+):
+    log_action(
+        db, user, "query", "安装登记",
+        f"查询安装登记 customer={customerName or '-'} mac={mac or '-'}",
+        request=request,
+    )
+    return ok(svc.search_installations(customerName, storeName, installDate, mac, imei, iccid))
+
+
 @router.get("/installers")
 def get_installers(
     db: Session = Depends(get_db),

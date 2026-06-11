@@ -46,6 +46,47 @@ def list_work_orders(
     return {"list": items, "total": len(items)}
 
 
+def search_installations(
+    customer_name: str = "",
+    store_name: str = "",
+    install_date: str = "",
+    mac: str = "",
+    imei: str = "",
+    iccid: str = "",
+) -> dict:
+    """安装登记查询：按时间、客户/门店、MAC、IMEI、主卡/备用卡检索"""
+    items = [
+        o for o in store.work_orders
+        if o.get("status") == "已安装" or o.get("mac") or o.get("iccid")
+    ]
+    if customer_name.strip():
+        kw = customer_name.strip()
+        items = [
+            o for o in items
+            if kw in o.get("customerName", "") or kw in o.get("storeName", "")
+        ]
+    if store_name.strip():
+        kw = store_name.strip()
+        items = [o for o in items if kw in o.get("storeName", "")]
+    if install_date:
+        items = [o for o in items if install_date in (o.get("installDate") or "")]
+    if mac:
+        mac_kw = mac.strip().replace(":", "").upper()
+        items = [
+            o for o in items
+            if mac_kw in (o.get("mac") or "").replace(":", "").upper()
+        ]
+    if imei:
+        items = [o for o in items if imei in (o.get("imei") or "")]
+    if iccid:
+        items = [
+            o for o in items
+            if iccid in (o.get("iccid") or "") or iccid in (o.get("backupIccid") or "")
+        ]
+    items = sorted(items, key=lambda x: x.get("installDate") or "", reverse=True)
+    return {"list": items, "total": len(items)}
+
+
 def create_work_order(body: dict, sales_name: str = "张三") -> dict:
     store.work_order_seq += 1
     oid = store.work_order_seq
@@ -120,6 +161,72 @@ def install_register(oid: int, body: dict, operator: str = "") -> dict:
 
 def list_installers() -> list[str]:
     return INSTALLERS
+
+
+def get_installation(oid: int) -> dict:
+    for o in store.work_orders:
+        if o["id"] == oid:
+            return o
+    raise BizError("登记记录不存在", 404)
+
+
+def _can_edit_installation(order: dict, operator: str, is_admin: bool = False) -> None:
+    if is_admin:
+        return
+    if order.get("installer") and order.get("installer") != operator:
+        raise BizError("只能修改自己的登记记录")
+
+
+def create_installation(body: dict, operator: str) -> dict:
+    store.work_order_seq += 1
+    oid = store.work_order_seq
+    day = datetime.now().strftime("%Y%m%d")
+    install_date = body.get("installDate") or datetime.now().strftime("%Y-%m-%d")
+    store_name = body.get("storeName", "")
+    item = {
+        "id": oid,
+        "orderNo": f"AZ-{day}-{oid:03d}",
+        "salesName": body.get("salesName", ""),
+        "storeName": store_name,
+        "customerName": body.get("customerName") or store_name,
+        "address": body.get("address", ""),
+        "contact": body.get("contact", ""),
+        "contactPhone": body.get("contactPhone", ""),
+        "installDate": install_date,
+        "remark": body.get("remark", ""),
+        "status": body.get("status", "已安装"),
+        "installer": operator,
+        "deviceSupplier": body.get("deviceSupplier", ""),
+        "deviceModel": body.get("deviceModel", ""),
+        "mac": body.get("mac", ""),
+        "imei": body.get("imei", ""),
+        "simSupplier": body.get("simSupplier", ""),
+        "operator": body.get("operator", ""),
+        "iccid": body.get("iccid", ""),
+        "backupIccid": body.get("backupIccid", ""),
+        "installRemark": body.get("installRemark", ""),
+        "failReason": body.get("failReason", ""),
+        "flowLogs": [],
+    }
+    _append_log(item, "新增安装登记", operator, f"门店 {store_name or '-'}")
+    store.work_orders.insert(0, item)
+    return item
+
+
+def update_installation(oid: int, body: dict, operator: str, is_admin: bool = False) -> dict:
+    order = get_installation(oid)
+    _can_edit_installation(order, operator, is_admin)
+    allowed = {
+        "installDate", "storeName", "customerName", "address", "contact", "contactPhone",
+        "remark", "status", "deviceSupplier", "deviceModel", "mac", "imei",
+        "simSupplier", "operator", "iccid", "backupIccid", "installRemark", "failReason",
+    }
+    patch = {k: v for k, v in body.items() if k in allowed}
+    if patch.get("storeName") and not patch.get("customerName"):
+        patch.setdefault("customerName", patch["storeName"])
+    updated = update_work_order(oid, patch)
+    _append_log(updated, "修改安装登记", operator, f"状态 → {updated.get('status', '-')}")
+    return updated
 
 
 def list_my_orders(installer_name: str = "") -> dict:

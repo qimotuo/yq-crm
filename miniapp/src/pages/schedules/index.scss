@@ -1,0 +1,52 @@
+@import '../../styles/variables.scss';
+
+.schedules-page {
+  padding: 20px 24px 40px;
+}
+
+.today-banner {
+  background: $gradient;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 8px 24px rgba(99, 102, 241, 0.25);
+}
+
+.banner-title {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 12px;
+}
+
+.banner-item {
+  display: block;
+  font-size: 26px;
+  color: rgba(255, 255, 255, 0.92);
+  margin-top: 8px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.type-tag {
+  font-size: 22px;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.type-visit { background: $primary-bg; color: $primary; }
+.type-call { background: #ecfdf5; color: $success; }
+.type-install { background: #fff7ed; color: $accent-orange; }
+
+.status-done-text { color: $success; }
+.status-pending-text { color: $primary; }
+
+.complete-btn {
+  margin-top: 16px;
+}

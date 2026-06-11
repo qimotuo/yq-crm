@@ -1,0 +1,16 @@
+# 1Panel 用户备用：与 PG 容器同网络直连
+# 用法: docker compose -f docker-compose.yml -f docker-compose.1panel.yml up -d
+# 先查网络名: docker inspect 1Panel-postgresql-5LoZ --format "{{range $k,$v := .NetworkSettings.Networks}}{{$k}}{{end}}"
+
+services:
+  api:
+    networks:
+      - default
+      - pg_net
+    environment:
+      DATABASE_URL: postgresql://user_G3KyGF:password_mzHsZx@1Panel-postgresql-5LoZ:5432/user_G3KyGF
+
+networks:
+  pg_net:
+    external: true
+    name: 1panel-network

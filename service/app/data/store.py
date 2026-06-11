@@ -17,7 +17,8 @@ WORK_ORDERS = [
         "contactPhone": "13800138000", "installDate": "2026-10-27", "remark": "新店，客户要加路由器",
         "status": "已安装", "installer": "赵云", "deviceSupplier": "鲲鹏", "deviceModel": "618",
         "mac": "AA:BB:CC:DD:EE:01", "imei": "865432041234567", "simSupplier": "光和",
-        "operator": "移动", "iccid": "89860123456789012345", "installRemark": "网络正常，已加路由器",
+        "operator": "移动", "iccid": "89860123456789012345", "backupIccid": "",
+        "installRemark": "网络正常，已加路由器",
         "flowLogs": [
             {"time": "2026-10-25 10:30", "action": "创建工单", "operator": "张三", "detail": "销售接单"},
             {"time": "2026-10-26 09:00", "action": "派工", "operator": "管理员", "detail": "派给赵云"},
@@ -30,7 +31,8 @@ WORK_ORDERS = [
         "customerName": "滨江工业园管委会", "address": "B座5层会议室监控点", "contact": "陈经理",
         "contactPhone": "13900139000", "installDate": "2026-10-28", "remark": "需配合弱电施工",
         "status": "已派工", "installer": "赵云", "deviceSupplier": "", "deviceModel": "",
-        "mac": "", "imei": "", "simSupplier": "", "operator": "", "iccid": "", "installRemark": "",
+        "mac": "", "imei": "", "simSupplier": "", "operator": "", "iccid": "", "backupIccid": "",
+        "installRemark": "",
         "flowLogs": [
             {"time": "2026-10-26 11:00", "action": "创建工单", "operator": "李四", "detail": "销售接单"},
             {"time": "2026-10-26 15:20", "action": "派工", "operator": "管理员", "detail": "派给赵云"},
@@ -41,7 +43,8 @@ WORK_ORDERS = [
         "customerName": "连锁便利店总部", "address": "C区5号铺", "contact": "刘店长",
         "contactPhone": "13700137000", "installDate": "2026-10-29", "remark": "周末安装",
         "status": "待派工", "installer": "", "deviceSupplier": "", "deviceModel": "",
-        "mac": "", "imei": "", "simSupplier": "", "operator": "", "iccid": "", "installRemark": "",
+        "mac": "", "imei": "", "simSupplier": "", "operator": "", "iccid": "", "backupIccid": "",
+        "installRemark": "",
         "flowLogs": [{"time": "2026-10-27 09:15", "action": "创建工单", "operator": "王五", "detail": "销售接单"}],
     },
     {
@@ -49,8 +52,8 @@ WORK_ORDERS = [
         "customerName": "科技初创公司B", "address": "高新区创业路88号", "contact": "周总",
         "contactPhone": "13600136000", "installDate": "2026-11-01", "remark": "需10账号企业版",
         "status": "安装中", "installer": "马超", "deviceSupplier": "云软", "deviceModel": "华为",
-        "mac": "AA:BB:CC:DD:EE:02", "imei": "865432041234568", "simSupplier": "", "operator": "电信", "iccid": "",
-        "installRemark": "弱电施工中",
+        "mac": "AA:BB:CC:DD:EE:02", "imei": "865432041234568", "simSupplier": "", "operator": "电信",
+        "iccid": "", "backupIccid": "", "installRemark": "弱电施工中",
         "flowLogs": [
             {"time": "2026-10-30 16:00", "action": "创建工单", "operator": "赵六", "detail": "销售接单"},
             {"time": "2026-10-31 10:00", "action": "派工", "operator": "管理员", "detail": "派给马超"},
@@ -62,12 +65,25 @@ WORK_ORDERS = [
         "customerName": "餐饮连锁A", "address": "人民路88号", "contact": "张老板",
         "contactPhone": "13500135001", "installDate": "2026-10-20", "remark": "",
         "status": "失败", "installer": "黄忠", "deviceSupplier": "", "deviceModel": "",
-        "mac": "", "imei": "", "simSupplier": "", "operator": "", "iccid": "", "installRemark": "",
-        "failReason": "客户不在场，线路未通",
+        "mac": "", "imei": "", "simSupplier": "", "operator": "", "iccid": "", "backupIccid": "",
+        "installRemark": "", "failReason": "客户不在场，线路未通",
         "flowLogs": [
             {"time": "2026-10-18 14:00", "action": "创建工单", "operator": "张三", "detail": "销售接单"},
             {"time": "2026-10-19 09:00", "action": "派工", "operator": "管理员", "detail": "派给黄忠"},
             {"time": "2026-10-20 11:00", "action": "安装失败", "operator": "黄忠", "detail": "客户不在场，线路未通"},
+        ],
+    },
+    {
+        "id": 6, "orderNo": "GD-20251122-031", "salesName": "张三", "storeName": "B3咖啡（新天地）",
+        "customerName": "B3咖啡", "address": "新天地广场B3层", "contact": "店长",
+        "contactPhone": "13800138088", "installDate": "2025-11-22", "remark": "",
+        "status": "已安装", "installer": "赵云", "deviceSupplier": "华为", "deviceModel": "HUAWEI",
+        "mac": "4HB7S24C26000931", "imei": "", "simSupplier": "移动", "operator": "移动",
+        "iccid": "8986112320403848756", "backupIccid": "89860487152590411606",
+        "installRemark": "",
+        "flowLogs": [
+            {"time": "2025-11-22 14:00", "action": "安装登记", "operator": "赵云",
+             "detail": "HUAWEI / MAC 4HB7S24C26000931"},
         ],
     },
 ]

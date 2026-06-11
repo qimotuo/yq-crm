@@ -1,0 +1,34 @@
+@import '../../styles/variables.scss';
+
+.customers-page {
+  padding: 20px 24px 40px;
+}
+
+.search-bar {
+  display: flex;
+  align-items: center;
+  background: #fff;
+  border-radius: 12px;
+  padding: 12px 20px;
+  margin-bottom: 20px;
+  border: 2px solid rgba(99, 102, 241, 0.12);
+}
+
+.search-input {
+  flex: 1;
+  font-size: 28px;
+}
+
+.search-btn {
+  color: $primary;
+  font-size: 28px;
+  font-weight: 600;
+  padding-left: 20px;
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}

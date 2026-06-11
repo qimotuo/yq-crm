@@ -1,0 +1,23 @@
+@import '../../styles/variables.scss';
+
+.protocol-page {
+  padding: 40px 48px 80px;
+  background: #fff;
+  min-height: 100vh;
+}
+
+.protocol-title {
+  display: block;
+  font-size: 40px;
+  font-weight: 600;
+  color: $text;
+  margin-bottom: 40px;
+}
+
+.protocol-p {
+  display: block;
+  font-size: 28px;
+  line-height: 1.7;
+  color: $text-secondary;
+  margin-bottom: 28px;
+}

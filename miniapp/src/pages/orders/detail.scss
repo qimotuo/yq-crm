@@ -1,0 +1,52 @@
+@import '../../styles/variables.scss';
+
+.detail-page {
+  padding-bottom: 48px;
+}
+
+.section-title {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: $text;
+}
+
+.pick-card {
+  margin-bottom: 16px;
+}
+
+.start-btn {
+  margin-top: 16px;
+}
+
+.preview-card {
+  background: #f8f7ff;
+}
+
+.preview-text {
+  display: block;
+  font-size: 26px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  font-family: monospace;
+  color: $text;
+}
+
+.submit-btn {
+  margin-top: 8px;
+  border-radius: 48px;
+  height: 88px;
+  line-height: 88px;
+}
+
+.picker-value {
+  line-height: 80px;
+}
+
+.readonly-tip {
+  text-align: center;
+  color: #94a3b8;
+  font-size: 26px;
+  padding: 24px;
+}

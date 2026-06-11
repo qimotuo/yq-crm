@@ -96,11 +96,13 @@ compose_up_build() {
 }
 
 print_access() {
-  local port="${WEB_PORT:-8080}"
+  local web_port="${WEB_PORT:-5173}"
+  local api_port="${API_PORT:-5172}"
   echo ""
   info "部署完成（API + Web）"
-  echo "  前端访问: http://localhost:${port}"
-  echo "  API 文档:  http://localhost:${port}/docs"
+  echo "  前端访问: http://localhost:${web_port}"
+  echo "  后端 API:  http://localhost:${api_port}"
+  echo "  API 文档:  http://localhost:${api_port}/docs"
   echo "  测试账号:  admin / 123456"
   echo ""
   if [[ "$MODE" == "app" ]]; then

@@ -1,0 +1,5 @@
+export default definePageConfig({
+  navigationBarTitleText: '协议详情',
+  navigationBarBackgroundColor: '#ffffff',
+  navigationBarTextStyle: 'black',
+})

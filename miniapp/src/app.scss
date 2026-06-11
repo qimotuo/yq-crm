@@ -1,0 +1,105 @@
+@import './styles/variables.scss';
+
+page {
+  background: $bg-page;
+  color: $text;
+  font-size: 28px;
+  box-sizing: border-box;
+}
+
+.container {
+  padding: 24px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+}
+
+.card-title {
+  font-size: 32px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: $text;
+}
+
+.card-row {
+  display: flex;
+  font-size: 26px;
+  color: $text-secondary;
+  margin-top: 8px;
+}
+
+.card-row .label {
+  width: 140px;
+  flex-shrink: 0;
+  color: #94a3b8;
+}
+
+.status-tag {
+  display: inline-block;
+  font-size: 22px;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.status-assigned { background: $primary-bg; color: $primary; }
+.status-installing { background: #fff7ed; color: $accent-orange; }
+.status-done { background: #ecfdf5; color: $success; }
+.status-fail { background: #fef2f2; color: #ef4444; }
+
+.btn-primary {
+  background: $gradient;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 28px;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+}
+
+.btn-ghost {
+  background: #fff;
+  color: $primary;
+  border: 2px solid $primary-light;
+  border-radius: 12px;
+  font-size: 26px;
+}
+
+.empty {
+  text-align: center;
+  color: #94a3b8;
+  padding: 80px 0;
+}
+
+.form-item {
+  margin-bottom: 24px;
+}
+
+.form-label {
+  font-size: 26px;
+  color: $text-secondary;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  background: #f8f7ff;
+  border-radius: 12px;
+  padding: 16px 20px;
+  font-size: 28px;
+}
+
+.action-bar {
+  display: flex;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.action-bar button {
+  flex: 1;
+}

@@ -1,0 +1,31 @@
+@import '../../styles/variables.scss';
+
+.follow-page {
+  padding-bottom: 40px;
+}
+
+.add-btn {
+  margin-bottom: 20px;
+}
+
+.type-tag {
+  font-size: 22px;
+  color: $accent;
+  background: #fdf4ff;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.content {
+  display: block;
+  font-size: 28px;
+  margin: 12px 0;
+  line-height: 1.5;
+}
+
+.time {
+  display: block;
+  font-size: 24px;
+  color: #94a3b8;
+  margin-top: 8px;
+}
