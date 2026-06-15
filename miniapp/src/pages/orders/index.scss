@@ -4,6 +4,55 @@
   padding: 20px 24px 48px;
 }
 
+.tab-bar {
+  display: flex;
+  background: #fff;
+  border-radius: 16px;
+  padding: 6px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 18px 0;
+  font-size: 28px;
+  color: $text-secondary;
+  border-radius: 12px;
+  transition: all 0.2s;
+
+  &.active {
+    background: $gradient;
+    color: #fff;
+    font-weight: 600;
+  }
+}
+
+.dispatch-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.dispatch-no {
+  font-size: 24px;
+  color: $text-secondary;
+}
+
+.dispatch-status {
+  font-size: 22px;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.dispatch-pending { background: #eff6ff; color: #2563eb; }
+.dispatch-dispatched { background: #f0fdf4; color: #16a34a; }
+.dispatch-success { background: #ecfdf5; color: #059669; }
+.dispatch-fail { background: #fef2f2; color: #dc2626; }
+.dispatch-postpone { background: #fff7ed; color: #ea580c; }
+
 .search-card {
   background: #fff;
   border-radius: 16px;

@@ -5,7 +5,7 @@ import {
   InboxOutlined, UserOutlined, LogoutOutlined, GlobalOutlined, FormOutlined,
   LinkOutlined, SearchOutlined, SettingOutlined, UserSwitchOutlined, CalendarOutlined,
   ContactsOutlined,   SafetyOutlined, FileProtectOutlined, HistoryOutlined, DatabaseOutlined, FileSearchOutlined,
-  BellOutlined,
+  BellOutlined, AccountBookOutlined, AuditOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSelector } from 'react-redux'
@@ -39,6 +39,8 @@ const ICON_MAP = {
   '/work-order-query': <FileSearchOutlined />,
   '/customers': <TeamOutlined />,
   '/finance': <DollarOutlined />,
+  '/account-ledger': <AccountBookOutlined />,
+  '/admin-ledger': <AuditOutlined />,
   '/contracts': <FileProtectOutlined />,
   '/integrated': <LinkOutlined />,
   '/report-trace': <SearchOutlined />,

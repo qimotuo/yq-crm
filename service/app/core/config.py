@@ -13,7 +13,10 @@ class Settings(BaseSettings):
     jwt_secret_key: str = "yq-crm-jwt-secret-change-in-production"
     jwt_expire_minutes: int = 60 * 24 * 7
 
-    # 后续 AI 智能体
+    wechat_app_id: str = ""
+    wechat_app_secret: str = ""
+    wechat_mock: bool = True
+
     openai_api_key: str = ""
     openai_base_url: str = "https://api.openai.com/v1"
     agent_model: str = "gpt-4o-mini"

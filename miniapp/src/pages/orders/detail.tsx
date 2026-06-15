@@ -5,11 +5,12 @@ import {
   getInstallationDetail,
   createInstallation,
   updateInstallation,
+  installRegister,
   INSTALL_STATUSES,
   type WorkOrder,
 } from '@/api/workOrder'
 import { formatInstallRecord } from '@/utils/installFormat'
-import { getUser } from '@/utils/auth'
+import { getUser, hasOperation } from '@/utils/auth'
 import './detail.scss'
 
 const emptyForm = () => ({
@@ -29,6 +30,7 @@ const emptyForm = () => ({
 export default function OrderDetailPage() {
   const router = useRouter()
   const recordId = router.params.id ? Number(router.params.id) : 0
+  const fromOrderId = router.params.orderId ? Number(router.params.orderId) : 0
   const isCreate = router.params.mode === 'create' || !recordId
   const [record, setRecord] = useState<WorkOrder | null>(null)
   const [form, setForm] = useState(emptyForm())
@@ -65,7 +67,13 @@ export default function OrderDetailPage() {
       const today = new Date()
       const pad = (n: number) => String(n).padStart(2, '0')
       const date = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`
-      setForm({ ...emptyForm(), installDate: date })
+      const prefill = {
+        ...emptyForm(),
+        installDate: router.params.installDate ? decodeURIComponent(router.params.installDate) : date,
+        storeName: router.params.storeName ? decodeURIComponent(router.params.storeName) : '',
+        customerName: router.params.customerName ? decodeURIComponent(router.params.customerName) : '',
+      }
+      setForm(prefill)
       setStatusIdx(0)
     } else {
       loadRecord()
@@ -83,6 +91,40 @@ export default function OrderDetailPage() {
     return user?.role === 'admin' || record.installer === user?.name
   }
 
+  const editable = canEdit() || (isCreate && !!fromOrderId)
+
+  const promptStockOut = (order: WorkOrder) => {
+    if (!hasOperation('stock:out') || !form.mac) {
+      setTimeout(() => Taro.navigateBack(), 800)
+      return
+    }
+    const q = [
+      `orderNo=${encodeURIComponent(order.orderNo || '')}`,
+      `model=${encodeURIComponent(form.deviceModel || order.deviceModel || '设备')}`,
+      `mac=${encodeURIComponent(form.mac)}`,
+      `imei=${encodeURIComponent(form.imei || '')}`,
+      `iccid=${encodeURIComponent(form.iccid || '')}`,
+      `iccid2=${encodeURIComponent(form.backupIccid || '')}`,
+      `operator=${encodeURIComponent(order.operator || '')}`,
+      `storeName=${encodeURIComponent(form.storeName || order.storeName || '')}`,
+      `customerName=${encodeURIComponent(form.customerName || order.customerName || '')}`,
+      `address=${encodeURIComponent(order.address || '')}`,
+    ].join('&')
+    Taro.showModal({
+      title: '登记完成',
+      content: '是否办理设备出库？',
+      confirmText: '去出库',
+      cancelText: '稍后',
+      success: (r) => {
+        if (r.confirm) {
+          Taro.redirectTo({ url: `/pages/stock/out?${q}` })
+        } else {
+          Taro.navigateBack()
+        }
+      },
+    })
+  }
+
   const handleSubmit = async () => {
     if (!form.storeName && !form.customerName) {
       Taro.showToast({ title: '请填写门店或客户名称', icon: 'none' })
@@ -96,16 +138,25 @@ export default function OrderDetailPage() {
     try {
       const payload = {
         ...form,
+        status: '已安装',
         customerName: form.customerName || form.storeName,
       }
-      if (isCreate) {
-        await createInstallation(payload)
+      let saved: WorkOrder | null = null
+      if (isCreate && fromOrderId) {
+        saved = await installRegister(fromOrderId, payload)
+        Taro.showToast({ title: '登记完成', icon: 'success' })
+      } else if (isCreate) {
+        saved = await createInstallation(payload)
         Taro.showToast({ title: '登记已创建', icon: 'success' })
       } else {
-        await updateInstallation(recordId, payload)
+        saved = await updateInstallation(recordId, payload)
         Taro.showToast({ title: '已保存', icon: 'success' })
       }
-      setTimeout(() => Taro.navigateBack(), 800)
+      if (saved && (isCreate && fromOrderId)) {
+        setTimeout(() => promptStockOut(saved!), 400)
+      } else {
+        setTimeout(() => Taro.navigateBack(), 800)
+      }
     } catch (e) {
       Taro.showToast({ title: (e as Error).message, icon: 'none' })
     } finally {
@@ -118,8 +169,6 @@ export default function OrderDetailPage() {
     ...form,
     customerName: form.customerName || form.storeName,
   } as WorkOrder)
-
-  const editable = canEdit()
 
   return (
     <View className='detail-page container'>

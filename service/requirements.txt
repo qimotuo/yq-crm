@@ -7,6 +7,7 @@ psycopg2-binary>=2.9.0
 passlib[bcrypt]>=1.7.4
 python-jose[cryptography]>=3.3.0
 bcrypt<4.1
+httpx>=0.27.0
 
 # 后续接 AI 智能体时可安装：
 # langchain>=0.3.0

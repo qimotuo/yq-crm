@@ -1,26 +1,33 @@
 import { useEffect, useState } from 'react'
 import { Table, Input, Button, Space, Tag, message, Popconfirm, Upload, Modal, Form } from 'antd'
-import { SearchOutlined, UserAddOutlined, UploadOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons'
+import { UserAddOutlined, UploadOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons'
 import { getPublicPool, claimCustomer, importPublicPool, createPublicPoolCustomer } from '../api'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, QueryButton, ResetButton } from '../components/ListToolbar'
+import { openCreateForm, closeFormModal } from '../utils/formModal'
 
 const PHONE_RULE = [{ pattern: /^1\d{10}$/, message: '请输入11位手机号' }]
 
 export default function PublicPoolList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [keyword, setKeyword] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [form] = Form.useForm()
 
-  const load = async () => {
+  const load = async (kw = keyword) => {
     setLoading(true)
     try {
-      const res = await getPublicPool(keyword ? { keyword } : {})
+      const res = await getPublicPool(kw ? { keyword: kw } : {})
       setData(res.list)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleReset = () => {
+    setKeyword('')
+    load('')
   }
 
   useEffect(() => { load() }, [])
@@ -41,9 +48,13 @@ export default function PublicPoolList() {
     const values = await form.validateFields()
     await createPublicPoolCustomer(values)
     message.success('公海客户已添加')
-    setModalOpen(false)
-    form.resetFields()
+    closeFormModal(form, setModalOpen)
     load()
+  }
+
+  const openCreate = () => {
+    openCreateForm(form)
+    setModalOpen(true)
   }
 
   const downloadTemplate = () => {
@@ -81,23 +92,32 @@ export default function PublicPoolList() {
         <h2>公海客户</h2>
         <p>销售可从公海池领取潜在客户，支持手动新增与 Excel 导入</p>
       </div>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input placeholder="搜索客户/店名" prefix={<SearchOutlined />} value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: 240 }} allowClear />
-        <Button type="primary" onClick={load}>查询</Button>
-        <Permission code="customer:create">
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>新增客户</Button>
-        </Permission>
-        <Permission code="customer:import">
-          <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>下载模板</Button>
-          <Upload showUploadList={false} beforeUpload={() => { handleImport(); return false }}>
-            <Button icon={<UploadOutlined />}>导入 Excel</Button>
-          </Upload>
-        </Permission>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput placeholder="搜索客户/店名" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={() => load()} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <>
+            <Permission code="customer:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增客户</Button>
+            </Permission>
+            <Permission code="customer:import">
+              <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>下载模板</Button>
+              <Upload showUploadList={false} beforeUpload={() => { handleImport(); return false }}>
+                <Button icon={<UploadOutlined />}>导入 Excel</Button>
+              </Upload>
+            </Permission>
+          </>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
 
-      <Modal title="新增公海客户" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)} destroyOnClose>
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+      <Modal title="新增公海客户" open={modalOpen} onOk={handleCreate} onCancel={() => closeFormModal(form, setModalOpen)} destroyOnClose>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} preserve={false}>
           <Form.Item name="storeName" label="店名" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="customerName" label="客户名称" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="contact" label="联系人"><Input /></Form.Item>

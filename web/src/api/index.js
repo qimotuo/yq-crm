@@ -5,10 +5,12 @@ import { buildDashboardStats } from '../utils/dashboardStats'
 import { getWorkOrderStore } from './workOrder'
 import { getScheduleStore } from './notify'
 import { DEFAULT_ROLES } from '../rbac/config'
-import { customers, financeList, stockInList, stockOutList, simStockInList, publicPoolCustomers, followUps, integratedList, contacts, contracts, poolConfig, returnLogs, systemUsers, delay } from '../mock/data'
+import { customers, financeList, stockInList, stockOutList, simStockInList, publicPoolCustomers, followUps, integratedList, contacts, contracts, poolConfig, returnLogs, systemUsers, accountLedgerList, adminLedgerList, delay } from '../mock/data'
 
 let customerStore = [...customers]
 let financeStore = [...financeList]
+let accountLedgerStore = [...accountLedgerList]
+let adminLedgerStore = [...adminLedgerList]
 let integratedStore = [...integratedList]
 
 function syncFinanceRelated(financeItem) {
@@ -35,7 +37,28 @@ let publicPoolStore = [...publicPoolCustomers]
 let followUpStore = [...followUps]
 let contactStore = [...contacts]
 let contractStore = [...contracts]
+let stockInStore = [...stockInList]
+let simStockInStore = [...simStockInList]
 let stockOutStore = [...stockOutList]
+
+function genStockInNo(store) {
+  const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const seq = store.length + 1
+  return `RK${date}${String(seq).padStart(3, '0')}`
+}
+
+function stockNow() {
+  const d = new Date()
+  const pad = (n) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
+}
+
+function normalizeStockDatetime(value) {
+  if (!value) return stockNow()
+  const text = String(value).trim()
+  if (text.length <= 10) return `${text} 00:00:00`
+  return text
+}
 let poolConfigStore = { ...poolConfig }
 let returnLogStore = [...returnLogs]
 
@@ -46,14 +69,41 @@ function validatePhone(phone) {
 function nowStr() {
   return new Date().toISOString().slice(0, 16).replace('T', ' ')
 }
+
+function filterCustomers(list, params = {}) {
+  let result = [...list]
+  const {
+    keyword, salesName, contactStatus, invoiceType, orderNo, mac, iccid, operator, installed, hasPayment,
+  } = params
+  if (salesName) result = result.filter((c) => (c.salesName || '').includes(salesName))
+  if (contactStatus) result = result.filter((c) => c.contactStatus === contactStatus)
+  if (invoiceType) result = result.filter((c) => c.invoiceType === invoiceType)
+  if (keyword) {
+    result = result.filter((c) =>
+      (c.customerName || '').includes(keyword)
+      || (c.storeName || '').includes(keyword)
+      || (c.phone || '').includes(keyword)
+      || (c.contact || '').includes(keyword))
+  }
+  if (orderNo) result = result.filter((c) => (c.orderNo || '').includes(orderNo))
+  if (mac) result = result.filter((c) => (c.mac || '').includes(mac))
+  if (iccid) {
+    result = result.filter((c) =>
+      (c.iccid || '').includes(iccid)
+      || (c.iccid2 || '').includes(iccid)
+      || (c.backupIccid || '').includes(iccid))
+  }
+  if (operator) result = result.filter((c) => (c.operator || '').includes(operator))
+  if (installed === 'yes') result = result.filter((c) => c.installDate || c.mac)
+  if (installed === 'no') result = result.filter((c) => !c.installDate && !c.mac)
+  if (hasPayment === 'yes') result = result.filter((c) => c.lastPaymentTime)
+  if (hasPayment === 'no') result = result.filter((c) => !c.lastPaymentTime)
+  return result
+}
+
 registerMock('GET', '/customers', async (body, params = {}) => {
   await delay()
-  let list = [...customerStore]
-  if (params.keyword) {
-    const kw = params.keyword
-    list = list.filter((c) => c.customerName.includes(kw) || c.storeName.includes(kw) || c.phone.includes(kw))
-  }
-  if (params.salesName) list = list.filter((c) => c.salesName === params.salesName)
+  let list = filterCustomers(customerStore, params)
   return { list, total: list.length }
 })
 
@@ -64,13 +114,41 @@ registerMock('GET', '/customers/detail', async (body, params) => {
 
 registerMock('PUT', '/customers/update', async (body) => {
   await delay()
-  customerStore = customerStore.map((c) => (c.id === body.id ? { ...c, ...body } : c))
+  const patch = { ...body, backupIccid: body.iccid2 || body.backupIccid || '' }
+  customerStore = customerStore.map((c) => (c.id === body.id ? { ...c, ...patch } : c))
   return customerStore.find((c) => c.id === body.id)
 })
 
 registerMock('POST', '/customers', async (body) => {
   await delay()
-  const item = { id: customerStore.length + 1, contactStatus: '正常', orderNo: '', installDate: '', financeId: null, lastPaymentTime: '', lastPaymentAmount: 0, ...body }
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const nextId = customerStore.reduce((max, c) => Math.max(max, c.id), 0) + 1
+  const isPrivate = Boolean(body.salesName)
+  const item = {
+    id: nextId,
+    contactStatus: isPrivate ? '待跟进' : (body.contactStatus || '正常'),
+    financeId: null,
+    lastPaymentTime: '',
+    lastPaymentAmount: 0,
+    claimTime: isPrivate ? now : (body.claimTime || ''),
+    lastFollowTime: '',
+    wechatId: '',
+    orderNo: '',
+    installDate: '',
+    deviceSupplier: '',
+    deviceModel: '',
+    mac: '',
+    imei: '',
+    iccid: '',
+    iccid2: '',
+    backupIccid: '',
+    operator: '',
+    simSupplier: '',
+    contractPeriod: '',
+    invoiceType: '增值税普通发票',
+    ...body,
+    backupIccid: body.iccid2 || body.backupIccid || '',
+  }
   customerStore.unshift(item)
   return item
 })
@@ -80,6 +158,96 @@ registerMock('DELETE', '/customers', async (body, params) => {
   const id = Number(params.id)
   customerStore = customerStore.filter((c) => c.id !== id)
   return true
+})
+
+registerMock('POST', '/customers/my-import', async (body) => {
+  await delay()
+  const rows = body.rows || []
+  if (!rows.length) throw new Error('导入数据为空')
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const salesName = body.salesName || rows[0]?.salesName || '张三'
+  let nextId = customerStore.reduce((max, c) => Math.max(max, c.id), 0)
+  const newItems = rows.map((row, idx) => {
+    if (!row.storeName || !row.customerName) {
+      throw new Error(`第 ${idx + 2} 行：店名和客户名称为必填项`)
+    }
+    validatePhone(row.phone)
+    nextId += 1
+    return {
+      id: nextId,
+      storeName: row.storeName,
+      customerName: row.customerName,
+      contact: row.contact || '',
+      phone: row.phone || '',
+      address: row.address || '',
+      salesName,
+      contactStatus: '待跟进',
+      financeId: null,
+      lastPaymentTime: '',
+      lastPaymentAmount: 0,
+      claimTime: now,
+      lastFollowTime: '',
+      wechatId: '',
+      orderNo: '',
+      installDate: '',
+      deviceSupplier: '',
+      deviceModel: '',
+      mac: '',
+      imei: '',
+      iccid: '',
+      iccid2: '',
+      backupIccid: '',
+      operator: '',
+      simSupplier: '',
+      contractPeriod: '',
+      invoiceType: '增值税普通发票',
+      source: '导入',
+    }
+  })
+  customerStore = [...newItems, ...customerStore]
+  return { count: newItems.length, list: newItems }
+})
+
+registerMock('POST', '/customers/import', async (body) => {
+  await delay()
+  const rows = body.rows || []
+  if (!rows.length) throw new Error('导入数据为空')
+  let nextId = customerStore.reduce((max, c) => Math.max(max, c.id), 0)
+  const newItems = rows.map((row, idx) => {
+    if (!row.storeName || !row.customerName) {
+      throw new Error(`第 ${idx + 2} 行：店名和客户名称为必填项`)
+    }
+    validatePhone(row.phone)
+    nextId += 1
+    return {
+      id: nextId,
+      contactStatus: row.contactStatus || '正常',
+      financeId: null,
+      lastPaymentTime: '',
+      lastPaymentAmount: 0,
+      claimTime: '',
+      lastFollowTime: '',
+      wechatId: '',
+      orderNo: '',
+      installDate: '',
+      deviceSupplier: '',
+      deviceModel: '',
+      mac: '',
+      imei: '',
+      iccid: '',
+      iccid2: '',
+      backupIccid: '',
+      operator: '',
+      simSupplier: '',
+      contractPeriod: '',
+      invoiceType: '增值税普通发票',
+      source: '导入',
+      ...row,
+      backupIccid: row.iccid2 || row.backupIccid || '',
+    }
+  })
+  customerStore = [...newItems, ...customerStore]
+  return { count: newItems.length, list: newItems }
 })
 
 registerMock('GET', '/public-pool', async (body, params = {}) => {
@@ -135,13 +303,18 @@ registerMock('GET', '/follow-ups', async (body, params = {}) => {
   await delay()
   let list = [...followUpStore]
   if (params.customerId) list = list.filter((f) => f.customerId === Number(params.customerId))
+  if (params.type) list = list.filter((f) => f.type === params.type)
+  if (params.salesName) list = list.filter((f) => f.salesName?.includes(params.salesName))
+  if (params.keyword) list = list.filter((f) => f.content?.includes(params.keyword))
+  if (params.status) list = list.filter((f) => f.status === params.status)
   return { list, total: list.length }
 })
 
 registerMock('POST', '/follow-ups', async (body) => {
   await delay()
   const ts = nowStr()
-  const item = { id: followUpStore.length + 1, createTime: ts, ...body }
+  const status = body.status || (body.nextPlan ? '待完成' : '已完成')
+  const item = { id: followUpStore.length + 1, createTime: ts, status, ...body }
   followUpStore.unshift(item)
   if (body.customerId) {
     customerStore = customerStore.map((c) =>
@@ -200,14 +373,274 @@ registerMock('PUT', '/finance/payment', async (body) => {
   return updated
 })
 
+function buildFinanceRecord(body, id) {
+  const total = Number(body.totalAmount) || 0
+  const paid = Number(body.paidAmount) || 0
+  const calc = calcPaymentStatus(total, paid, body.paymentPlanDate)
+  const today = new Date().toISOString().slice(0, 10)
+  return {
+    id: id || (financeStore.length ? Math.max(...financeStore.map((f) => f.id)) + 1 : 1),
+    storeName: body.storeName || '',
+    customerName: body.customerName || '',
+    orderNo: body.orderNo || '',
+    package: body.package || '',
+    billMonth: body.billMonth || today.slice(0, 7),
+    contractPeriod: body.contractPeriod || '',
+    contractStatus: body.contractStatus || '正常',
+    totalAmount: total,
+    paidAmount: paid,
+    unpaidAmount: calc.unpaidAmount,
+    paymentStatus: calc.paymentStatus,
+    paymentProgress: calc.paymentProgress,
+    invoiceStatus: body.invoiceStatus || '待开票',
+    salesName: body.salesName || '',
+    paymentPlanDate: body.paymentPlanDate || '',
+    lastPaymentTime: paid > 0 ? today : '',
+    paymentRecords: [],
+  }
+}
+
+function linkCustomerFinance(orderNo, financeId) {
+  customerStore = customerStore.map((c) =>
+    c.orderNo === orderNo ? { ...c, financeId } : c,
+  )
+}
+
+registerMock('POST', '/finance', async (body) => {
+  await delay()
+  if (financeStore.some((f) => f.orderNo === body.orderNo)) throw new Error(`工单 ${body.orderNo} 已存在财务账单`)
+  const item = buildFinanceRecord(body)
+  financeStore.unshift(item)
+  linkCustomerFinance(body.orderNo, item.id)
+  syncFinanceRelated(item)
+  return item
+})
+
+registerMock('POST', '/finance/import', async (body) => {
+  await delay(600)
+  const newItems = (body.rows || [])
+    .filter((row) => !financeStore.some((f) => f.orderNo === row.orderNo))
+    .map((row) => {
+      const item = buildFinanceRecord(row)
+      financeStore.unshift(item)
+      linkCustomerFinance(row.orderNo, item.id)
+      syncFinanceRelated(item)
+      return item
+    })
+  return { count: newItems.length, list: newItems }
+})
+
+function filterByMonth(list, month) {
+  if (!month) return list
+  return list.filter((r) => r.entryDate?.startsWith(month))
+}
+
+function nextLedgerId(store) {
+  return store.length ? Math.max(...store.map((r) => r.id)) + 1 : 1
+}
+
+registerMock('GET', '/account-ledger', async (body, params = {}) => {
+  await delay()
+  let list = [...accountLedgerStore]
+  if (params.section) list = list.filter((r) => r.section === params.section)
+  if (params.month) list = filterByMonth(list, params.month)
+  if (params.direction) list = list.filter((r) => r.direction === params.direction)
+  return { list, total: list.length }
+})
+
+registerMock('POST', '/account-ledger', async (body) => {
+  await delay()
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const item = {
+    id: nextLedgerId(accountLedgerStore),
+    section: body.section,
+    direction: body.direction,
+    category: body.category,
+    amount: Number(body.amount) || 0,
+    entryDate: body.entryDate,
+    remark: body.remark || '',
+    remarkOption: body.remarkOption || '',
+    createdBy: body.createdBy || '',
+    createTime: now,
+  }
+  accountLedgerStore.unshift(item)
+  return item
+})
+
+registerMock('DELETE', '/account-ledger', async (body, params) => {
+  await delay()
+  const id = Number(params.id)
+  accountLedgerStore = accountLedgerStore.filter((r) => r.id !== id)
+  return { ok: true }
+})
+
+registerMock('GET', '/admin-ledger', async (body, params = {}) => {
+  await delay()
+  let list = [...adminLedgerStore]
+  if (params.month) list = filterByMonth(list, params.month)
+  if (params.category) list = list.filter((r) => r.category === params.category)
+  return { list, total: list.length }
+})
+
+registerMock('POST', '/admin-ledger', async (body) => {
+  await delay()
+  const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const item = {
+    id: nextLedgerId(adminLedgerStore),
+    category: body.category,
+    amount: Number(body.amount) || 0,
+    entryDate: body.entryDate,
+    remark: body.remark || '',
+    createdBy: body.createdBy || '',
+    createTime: now,
+  }
+  adminLedgerStore.unshift(item)
+  return item
+})
+
+registerMock('DELETE', '/admin-ledger', async (body, params) => {
+  await delay()
+  const id = Number(params.id)
+  adminLedgerStore = adminLedgerStore.filter((r) => r.id !== id)
+  return { ok: true }
+})
+
 registerMock('GET', '/stock/in', async () => {
   await delay()
-  return { list: stockInList, total: stockInList.length }
+  return { list: stockInStore, total: stockInStore.length }
+})
+
+registerMock('POST', '/stock/in', async (body) => {
+  await delay()
+  const qty = Number(body.qty) || 1
+  const item = {
+    id: stockInStore.length ? Math.max(...stockInStore.map((s) => s.id)) + 1 : 1,
+    inNo: genStockInNo(stockInStore),
+    inDate: normalizeStockDatetime(body.inDate),
+    supplier: body.supplier || '',
+    model: body.model || '',
+    imei: body.imei || '',
+    mac: body.mac || '',
+    qty,
+    stockQty: qty,
+    receiver: body.receiver || '',
+    remark: body.remark || '',
+  }
+  stockInStore.unshift(item)
+  return item
+})
+
+registerMock('PUT', '/stock/in', async (body) => {
+  await delay()
+  const old = stockInStore.find((s) => s.id === body.id)
+  if (!old) throw new Error('入库记录不存在')
+  const newQty = Number(body.qty) || old.qty
+  const updated = {
+    ...old,
+    ...body,
+    qty: newQty,
+    stockQty: (old.stockQty || 0) + (newQty - (old.qty || 0)),
+  }
+  stockInStore = stockInStore.map((s) => (s.id === body.id ? updated : s))
+  return updated
+})
+
+registerMock('DELETE', '/stock/in', async (body, params) => {
+  await delay()
+  const id = Number(params.id)
+  stockInStore = stockInStore.filter((s) => s.id !== id)
+  return true
+})
+
+registerMock('POST', '/stock/in/import', async (body) => {
+  await delay(600)
+  const rows = body.rows || []
+  const newItems = rows.map((row, i) => {
+    const qty = Number(row.qty) || 1
+    return {
+      id: (stockInStore.length ? Math.max(...stockInStore.map((s) => s.id)) : 0) + i + 1,
+      inNo: genStockInNo([...stockInStore, ...rows.slice(0, i)]),
+      inDate: normalizeStockDatetime(row.inDate),
+      supplier: row.supplier || '',
+      model: row.model || '',
+      imei: row.imei || '',
+      mac: row.mac || '',
+      qty,
+      stockQty: qty,
+      receiver: row.receiver || '',
+      remark: row.remark || '',
+    }
+  })
+  stockInStore = [...newItems, ...stockInStore]
+  return { count: newItems.length, list: newItems }
 })
 
 registerMock('GET', '/stock/sim-in', async () => {
   await delay()
-  return { list: simStockInList, total: simStockInList.length }
+  return { list: simStockInStore, total: simStockInStore.length }
+})
+
+registerMock('POST', '/stock/sim-in', async (body) => {
+  await delay()
+  const qty = Number(body.qty) || 1
+  const item = {
+    id: simStockInStore.length ? Math.max(...simStockInStore.map((s) => s.id)) + 1 : 1,
+    inNo: genStockInNo(simStockInStore),
+    inDate: normalizeStockDatetime(body.inDate),
+    supplier: body.supplier || '',
+    operator: body.operator || '',
+    iccid: body.iccid || '',
+    qty,
+    stockQty: qty,
+    receiver: body.receiver || '',
+    remark: body.remark || '',
+  }
+  simStockInStore.unshift(item)
+  return item
+})
+
+registerMock('PUT', '/stock/sim-in', async (body) => {
+  await delay()
+  const old = simStockInStore.find((s) => s.id === body.id)
+  if (!old) throw new Error('入库记录不存在')
+  const newQty = Number(body.qty) || old.qty
+  const updated = {
+    ...old,
+    ...body,
+    qty: newQty,
+    stockQty: (old.stockQty || 0) + (newQty - (old.qty || 0)),
+  }
+  simStockInStore = simStockInStore.map((s) => (s.id === body.id ? updated : s))
+  return updated
+})
+
+registerMock('DELETE', '/stock/sim-in', async (body, params) => {
+  await delay()
+  const id = Number(params.id)
+  simStockInStore = simStockInStore.filter((s) => s.id !== id)
+  return true
+})
+
+registerMock('POST', '/stock/sim-in/import', async (body) => {
+  await delay(600)
+  const rows = body.rows || []
+  const newItems = rows.map((row, i) => {
+    const qty = Number(row.qty) || 1
+    return {
+      id: (simStockInStore.length ? Math.max(...simStockInStore.map((s) => s.id)) : 0) + i + 1,
+      inNo: genStockInNo([...simStockInStore, ...rows.slice(0, i)]),
+      inDate: normalizeStockDatetime(row.inDate),
+      supplier: row.supplier || '',
+      operator: row.operator || '',
+      iccid: row.iccid || '',
+      qty,
+      stockQty: qty,
+      receiver: row.receiver || '',
+      remark: row.remark || '',
+    }
+  })
+  simStockInStore = [...newItems, ...simStockInStore]
+  return { count: newItems.length, list: newItems }
 })
 
 registerMock('GET', '/stock/out', async () => {
@@ -217,16 +650,47 @@ registerMock('GET', '/stock/out', async () => {
 
 registerMock('POST', '/stock/out', async (body) => {
   await delay()
-  const id = stockOutStore.length + 1
+  const id = stockOutStore.length ? Math.max(...stockOutStore.map((s) => s.id)) + 1 : 1
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const item = {
     id,
     outNo: `CK${date}${String(id).padStart(3, '0')}`,
-    outDate: new Date().toISOString().slice(0, 10),
+    outDate: normalizeStockDatetime(body.outDate),
     ...body,
   }
   stockOutStore.unshift(item)
   return item
+})
+
+registerMock('POST', '/stock/out/import', async (body) => {
+  await delay(600)
+  const orders = getWorkOrderStore()
+  const rows = body.rows || []
+  const baseId = stockOutStore.length ? Math.max(...stockOutStore.map((s) => s.id)) : 0
+  const newItems = rows.map((row, i) => {
+    const order = orders.find((o) => o.orderNo === row.orderNo)
+    const id = baseId + i + 1
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+    return {
+      id,
+      outNo: `CK${date}${String(id).padStart(3, '0')}`,
+      outDate: normalizeStockDatetime(row.outDate),
+      orderNo: row.orderNo,
+      storeName: order?.storeName || '',
+      customerName: order?.customerName || '',
+      address: order?.address || '',
+      model: row.model || '',
+      imei: row.imei || '',
+      mac: row.mac || '',
+      iccid: row.iccid || '',
+      iccid2: row.iccid2 || '',
+      operator: row.operator || '',
+      receiver: row.receiver || '',
+      remark: row.remark || '',
+    }
+  })
+  stockOutStore = [...newItems, ...stockOutStore]
+  return { count: newItems.length, list: newItems }
 })
 
 registerMock('GET', '/pool/config', async () => {
@@ -331,11 +795,35 @@ registerMock('PUT', '/contacts', async (body) => {
   return contactStore.find((c) => c.id === body.id)
 })
 
-registerMock('POST', '/contacts/import', async () => {
+registerMock('POST', '/contacts/import', async (body) => {
   await delay(600)
-  const item = { id: contactStore.length + 1, customerName: '导入客户示例', storeName: '示例门店', name: '导入联系人', phone: '13800138888', title: '经理', isPrimary: true }
-  contactStore.unshift(item)
-  return { count: 1 }
+  const rows = body.rows || []
+  if (!rows.length) throw new Error('导入数据为空')
+  let nextId = contactStore.reduce((max, c) => Math.max(max, c.id), 0)
+  const newItems = rows.map((row, idx) => {
+    if (!row.customerName || !row.name || !row.phone) {
+      throw new Error(`第 ${idx + 2} 行：客户名称、姓名和手机号为必填项`)
+    }
+    validatePhone(row.phone)
+    const isPrimary = row.isPrimary === '是' || row.isPrimary === 'true' || row.isPrimary === '1'
+    nextId += 1
+    return {
+      id: nextId,
+      customerName: row.customerName,
+      storeName: row.storeName || '',
+      name: row.name,
+      phone: row.phone,
+      title: row.title || '',
+      isPrimary,
+    }
+  })
+  newItems.forEach((item) => {
+    if (item.isPrimary) {
+      contactStore = contactStore.map((c) => (c.customerName === item.customerName ? { ...c, isPrimary: false } : c))
+    }
+    contactStore.unshift(item)
+  })
+  return { count: newItems.length }
 })
 
 registerMock('GET', '/pool/return-logs', async () => {
@@ -360,6 +848,48 @@ registerMock('POST', '/contracts/generate', async (body) => {
     c.orderNo === body.orderNo ? { ...c, status: '正常', contractNo: c.contractNo.replace('待', 'SH') } : c,
   )
   return contractStore.find((c) => c.orderNo === body.orderNo)
+})
+
+function genContractNo(cityCode = 'SH') {
+  const d = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const seq = contractStore.length + 1
+  return `${cityCode}${d}${String(seq).padStart(3, '0')}`
+}
+
+function buildContractRecord(body, id) {
+  return {
+    id: id || (contractStore.length ? Math.max(...contractStore.map((c) => c.id)) + 1 : 1),
+    contractNo: body.contractNo || genContractNo(body.cityCode || 'SH'),
+    orderNo: body.orderNo || '',
+    customerName: body.customerName || '',
+    storeName: body.storeName || '',
+    package: body.package || '',
+    amount: Number(body.amount) || 0,
+    startDate: body.startDate || '',
+    endDate: body.endDate || '',
+    status: body.status || '待生成',
+    cityCode: body.cityCode || 'SH',
+  }
+}
+
+registerMock('POST', '/contracts', async (body) => {
+  await delay()
+  if (contractStore.some((c) => c.orderNo === body.orderNo)) throw new Error(`工单 ${body.orderNo} 已存在合同`)
+  const item = buildContractRecord(body)
+  contractStore.unshift(item)
+  return item
+})
+
+registerMock('POST', '/contracts/import', async (body) => {
+  await delay(600)
+  const newItems = (body.rows || [])
+    .filter((row) => !contractStore.some((c) => c.orderNo === row.orderNo))
+    .map((row) => {
+      const item = buildContractRecord(row)
+      contractStore.unshift(item)
+      return item
+    })
+  return { count: newItems.length, list: newItems }
 })
 
 registerMock('POST', '/auth/login', async (body) => {
@@ -424,6 +954,40 @@ export function getFinanceList(params) {
   return request(`/finance?${qs}`)
 }
 
+export function createFinance(data) {
+  return request('/finance', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function importFinance(rows) {
+  return request('/finance/import', { method: 'POST', body: JSON.stringify({ rows }) })
+}
+
+export function getAccountLedger(params) {
+  const qs = new URLSearchParams(params).toString()
+  return request(`/account-ledger?${qs}`)
+}
+
+export function createAccountLedger(data) {
+  return request('/account-ledger', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function deleteAccountLedger(id) {
+  return request(`/account-ledger?id=${id}`, { method: 'DELETE' })
+}
+
+export function getAdminLedger(params) {
+  const qs = new URLSearchParams(params).toString()
+  return request(`/admin-ledger?${qs}`)
+}
+
+export function createAdminLedger(data) {
+  return request('/admin-ledger', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function deleteAdminLedger(id) {
+  return request(`/admin-ledger?id=${id}`, { method: 'DELETE' })
+}
+
 export function recordPayment(data) {
   return request('/finance/payment', { method: 'PUT', body: JSON.stringify(data) })
 }
@@ -438,6 +1002,14 @@ export function createCustomer(data) {
 
 export function deleteCustomer(id) {
   return request(`/customers?id=${id}`, { method: 'DELETE' })
+}
+
+export function importCustomers(rows) {
+  return request('/customers/import', { method: 'POST', body: JSON.stringify({ rows }) })
+}
+
+export function importMyCustomers(rows, salesName) {
+  return request('/customers/my-import', { method: 'POST', body: JSON.stringify({ rows, salesName }) })
 }
 
 export function getStockIn() {
@@ -462,8 +1034,11 @@ export function traceQuery(type, value) {
   return request(`/trace?${qs}`)
 }
 
-export function getSystemUsers() {
-  return request('/system/users')
+export function getSystemUsers(params = {}) {
+  const qs = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => { if (v) qs.set(k, v) })
+  const q = qs.toString()
+  return request(`/system/users${q ? `?${q}` : ''}`)
 }
 
 export function createSystemUser(data) {
@@ -526,6 +1101,14 @@ export function getContracts(params) {
   return request(`/contracts?${qs}`)
 }
 
+export function createContract(data) {
+  return request('/contracts', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function importContracts(rows) {
+  return request('/contracts/import', { method: 'POST', body: JSON.stringify({ rows }) })
+}
+
 export function generateContract(orderNo) {
   return request('/contracts/generate', { method: 'POST', body: JSON.stringify({ orderNo }) })
 }
@@ -550,8 +1133,8 @@ export function updateContact(data) {
   return request('/contacts', { method: 'PUT', body: JSON.stringify(data) })
 }
 
-export function importContacts() {
-  return request('/contacts/import', { method: 'POST', body: '{}' })
+export function importContacts(rows) {
+  return request('/contacts/import', { method: 'POST', body: JSON.stringify({ rows }) })
 }
 
 export function getReturnLogs() {
@@ -560,4 +1143,40 @@ export function getReturnLogs() {
 
 export function createStockOut(data) {
   return request('/stock/out', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function importStockOut(rows) {
+  return request('/stock/out/import', { method: 'POST', body: JSON.stringify({ rows }) })
+}
+
+export function createStockIn(data) {
+  return request('/stock/in', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateStockIn(data) {
+  return request('/stock/in', { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function deleteStockIn(id) {
+  return request(`/stock/in?id=${id}`, { method: 'DELETE' })
+}
+
+export function importStockIn(rows) {
+  return request('/stock/in/import', { method: 'POST', body: JSON.stringify({ rows }) })
+}
+
+export function createSimStockIn(data) {
+  return request('/stock/sim-in', { method: 'POST', body: JSON.stringify(data) })
+}
+
+export function updateSimStockIn(data) {
+  return request('/stock/sim-in', { method: 'PUT', body: JSON.stringify(data) })
+}
+
+export function deleteSimStockIn(id) {
+  return request(`/stock/sim-in?id=${id}`, { method: 'DELETE' })
+}
+
+export function importSimStockIn(rows) {
+  return request('/stock/sim-in/import', { method: 'POST', body: JSON.stringify({ rows }) })
 }

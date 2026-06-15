@@ -25,8 +25,14 @@ NOTIFY_TEMPLATES: dict[str, dict[str, Any]] = {
     "workorder_dispatch": {
         "type": "工单",
         "title": "新派工任务",
-        "content": "工单 {order_no} 已派给 {installer}，请安排安装",
+        "content": "工单 {order_no} 已派给您，请安排安装",
         "path": "/install-register",
+    },
+    "workorder_need_dispatch": {
+        "type": "工单",
+        "title": "新工单待派工",
+        "content": "{order_no}（{customer_name}）等待派工",
+        "path": "/dispatch",
     },
     "workorder_install": {
         "type": "工单",

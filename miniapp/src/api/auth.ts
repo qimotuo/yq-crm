@@ -17,3 +17,17 @@ export function login(username: string, password: string) {
 export function getMe() {
   return request<{ user: AuthUser; permissions: Permissions }>('/auth/me')
 }
+
+export function wechatLogin(code: string) {
+  return request<LoginResult>('/auth/wechat-login', {
+    method: 'POST',
+    data: { code },
+  })
+}
+
+export function bindWechat(code: string) {
+  return request<{ bound: boolean; openid: string }>('/auth/wechat-bind', {
+    method: 'POST',
+    data: { code },
+  })
+}

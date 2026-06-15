@@ -46,8 +46,11 @@ export default function SchedulesPage() {
 
   const handleComplete = async (id: number) => {
     try {
-      await completeSchedule(id)
-      Taro.showToast({ title: '已完成', icon: 'success' })
+      const res = await completeSchedule(id) as Schedule & { followUp?: { id: number } }
+      Taro.showToast({
+        title: res.followUp ? '已完成并写入跟进' : '已完成',
+        icon: 'success',
+      })
       load()
     } catch (e) {
       Taro.showToast({ title: (e as Error).message, icon: 'none' })

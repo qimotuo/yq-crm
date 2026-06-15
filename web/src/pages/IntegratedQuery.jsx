@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react'
 import { Table, Input, Button, Space, Tag, Progress, Modal, Descriptions, Form, message } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
 import { getIntegratedList, getFinanceList, recordPayment, sendBill } from '../api'
 import { PaymentStatusTag } from '../components/StatusTag'
 import { formatMoney } from '../utils/helpers'
 import PaymentModal from '../components/PaymentModal'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, QueryButton, ResetButton } from '../components/ListToolbar'
 
 export default function IntegratedQuery() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [keyword, setKeyword] = useState('')
   const [assetModal, setAssetModal] = useState(false)
@@ -18,14 +18,19 @@ export default function IntegratedQuery() {
   const [financeRecord, setFinanceRecord] = useState(null)
   const [billForm] = Form.useForm()
 
-  const load = async () => {
+  const load = async (kw = keyword) => {
     setLoading(true)
     try {
-      const res = await getIntegratedList(keyword ? { keyword } : {})
+      const res = await getIntegratedList(kw ? { keyword: kw } : {})
       setData(res.list)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleReset = () => {
+    setKeyword('')
+    load('')
   }
 
   useEffect(() => { load() }, [])
@@ -102,10 +107,15 @@ export default function IntegratedQuery() {
         <h2>销售+财务+工单关联查询</h2>
         <p>跨模块统一视图，一表看清客户全貌</p>
       </div>
-      <Space style={{ marginBottom: 16 }}>
-        <Input placeholder="搜索客户/工单/门店" prefix={<SearchOutlined />} value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: 260 }} allowClear />
-        <Button type="primary" onClick={load}>查询</Button>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput placeholder="搜索客户/工单/门店" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={() => load()} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 2600 }} pagination={{ pageSize: 10 }} />
 
       <Modal title={`资产明细 — ${current?.customerName}`} open={assetModal} onCancel={() => setAssetModal(false)} footer={null} width={560}>

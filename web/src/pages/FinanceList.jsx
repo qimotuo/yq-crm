@@ -1,33 +1,60 @@
 import { useEffect, useState } from 'react'
-import { Table, Select, Button, Space, Progress, Tag, Modal, Form, Input, Descriptions, message, Timeline } from 'antd'
-import { getFinanceList, recordPayment, sendBill, getPaymentRecords } from '../api'
+import { Table, Select, Button, Space, Progress, Tag, Modal, Form, Input, InputNumber, Descriptions, message, Timeline, Upload } from 'antd'
+import { PlusOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
+import { getFinanceList, createFinance, importFinance, recordPayment, sendBill, getPaymentRecords } from '../api'
 import { PaymentStatusTag } from '../components/StatusTag'
 import { formatMoney } from '../utils/helpers'
 import ExportButton from '../components/ExportButton'
 import PaymentModal from '../components/PaymentModal'
 import { Permission } from '../components/RequireAuth'
+import { openCreateForm, closeFormModal } from '../utils/formModal'
+import { downloadCsvTemplate, parseCsvFile } from '../utils/csvImport'
+import { ListToolbar, QueryButton, ResetButton, FilterSelect } from '../components/ListToolbar'
+
+const FINANCE_TEMPLATE = {
+  filename: '财务账单导入模板.csv',
+  headers: ['店名', '客户名称', '工单号', '合作套餐', '账单月份', '合同周期', '应收总额', '已收金额', '回款计划日', '经办销售', '开票状态'],
+  keys: ['storeName', 'customerName', 'orderNo', 'package', 'billMonth', 'contractPeriod', 'totalAmount', 'paidAmount', 'paymentPlanDate', 'salesName', 'invoiceStatus'],
+  sample: ['红渡小香', '智慧社区A区物业', 'GD-20261025-088', '企业旗舰版(5账号)', '2026-11', '2026-11-02 至 2027-11-01', '12000', '0', '2026-11-05', '张三', '待开票'],
+  required: ['storeName', 'customerName', 'orderNo', 'totalAmount'],
+}
+
+const INVOICE_STATUSES = ['增值税专用发票', '增值税普通发票', '不开发票', '待开票', '已开票']
 
 export default function FinanceList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [statusFilter, setStatusFilter] = useState('')
   const [detailModal, setDetailModal] = useState(false)
   const [payModal, setPayModal] = useState(false)
   const [billModal, setBillModal] = useState(false)
+  const [createModal, setCreateModal] = useState(false)
   const [current, setCurrent] = useState(null)
   const [paymentRecords, setPaymentRecords] = useState([])
   const [billForm] = Form.useForm()
+  const [form] = Form.useForm()
 
-  const load = async () => {
+  const load = async (status = statusFilter) => {
     setLoading(true)
     try {
       const params = {}
-      if (statusFilter) params.paymentStatus = statusFilter
+      if (status) params.paymentStatus = status
       const res = await getFinanceList(params)
       setData(res.list)
     } finally {
       setLoading(false)
     }
+  }
+
+  const onStatusChange = (v) => {
+    const status = v || ''
+    setStatusFilter(status)
+    load(status)
+  }
+
+  const handleReset = () => {
+    setStatusFilter('')
+    load('')
   }
 
   useEffect(() => { load() }, [])
@@ -51,6 +78,41 @@ export default function FinanceList() {
     await sendBill({ ...values, id: current.id, customerName: current.customerName })
     message.success('对账单已发送')
     setBillModal(false)
+  }
+
+  const openCreate = () => {
+    openCreateForm(form, {
+      storeName: '', customerName: '', orderNo: '', package: '',
+      billMonth: new Date().toISOString().slice(0, 7),
+      contractPeriod: '', totalAmount: 0, paidAmount: 0,
+      paymentPlanDate: '', salesName: '', invoiceStatus: '待开票',
+    })
+    setCreateModal(true)
+  }
+
+  const handleCreate = async () => {
+    const values = await form.validateFields()
+    await createFinance(values)
+    message.success('账单已新增')
+    closeFormModal(form, setCreateModal)
+    load()
+  }
+
+  const handleImport = async (file) => {
+    try {
+      const text = await file.text()
+      const rows = parseCsvFile(text, FINANCE_TEMPLATE).map((row) => ({
+        ...row,
+        totalAmount: Number(row.totalAmount) || 0,
+        paidAmount: Number(row.paidAmount) || 0,
+      }))
+      const res = await importFinance(rows)
+      message.success(`成功导入 ${res.count} 条账单`)
+      load()
+    } catch (e) {
+      message.error(e.message || '导入失败')
+    }
+    return false
   }
 
   const invoiceColor = { '已开票': 'success', '待开票': 'warning', '不开票': 'default' }
@@ -94,15 +156,51 @@ export default function FinanceList() {
         <h2>财务板块</h2>
         <p>应收/已收/未收管理、回款录入与核销</p>
       </div>
-      <Space style={{ marginBottom: 16 }}>
-        <Select placeholder="回款状态" value={statusFilter || undefined} onChange={setStatusFilter} allowClear style={{ width: 130 }}
-          options={['已回款', '部分回款', '已逾期', '未回款'].map((s) => ({ value: s, label: s }))} />
-        <Button type="primary" onClick={load}>查询</Button>
-        <Permission code="finance:export">
-          <ExportButton filename="finance.csv" label="导出账单" />
-        </Permission>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterSelect placeholder="回款状态" value={statusFilter || undefined} onChange={onStatusChange}
+              options={['已回款', '部分回款', '已逾期', '未回款'].map((s) => ({ value: s, label: s }))} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <Space>
+            <Permission code="finance:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增账单</Button>
+            </Permission>
+            <Permission code="finance:import">
+              <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(FINANCE_TEMPLATE)}>下载模板</Button>
+              <Upload accept=".csv" showUploadList={false} beforeUpload={handleImport}>
+                <Button icon={<UploadOutlined />}>批量导入</Button>
+              </Upload>
+            </Permission>
+            <Permission code="finance:export">
+              <ExportButton filename="finance.csv" label="导出账单" />
+            </Permission>
+          </Space>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 2200 }} pagination={{ pageSize: 10 }} />
+
+      <Modal title="新增财务账单" open={createModal} onOk={handleCreate} onCancel={() => closeFormModal(form, setCreateModal)} width={640} destroyOnClose>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="storeName" label="客户门店" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="customerName" label="客户名称" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="orderNo" label="工单号" rules={[{ required: true }]}><Input placeholder="GD-20261025-088" /></Form.Item>
+          <Form.Item name="package" label="合作套餐"><Input /></Form.Item>
+          <Form.Item name="billMonth" label="账单月份"><Input placeholder="2026-11" /></Form.Item>
+          <Form.Item name="contractPeriod" label="合同周期"><Input placeholder="2026-11-02 至 2027-11-01" /></Form.Item>
+          <Form.Item name="totalAmount" label="应收总额" rules={[{ required: true }]}><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="paidAmount" label="已收金额"><InputNumber min={0} style={{ width: '100%' }} /></Form.Item>
+          <Form.Item name="paymentPlanDate" label="回款计划日"><Input placeholder="2026-11-05" /></Form.Item>
+          <Form.Item name="salesName" label="经办销售"><Input /></Form.Item>
+          <Form.Item name="invoiceStatus" label="开票状态">
+            <Select options={INVOICE_STATUSES.map((s) => ({ value: s, label: s }))} />
+          </Form.Item>
+        </Form>
+      </Modal>
 
       <Modal title="账单详情" open={detailModal} onCancel={() => setDetailModal(false)} footer={null} width={640}>
         {current && (

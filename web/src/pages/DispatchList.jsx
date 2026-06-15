@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Space, Select, Modal, Form, Input, message, Tag, Descriptions, Steps, Timeline, Tabs } from 'antd'
-import { SendOutlined, EyeOutlined, CloseCircleOutlined, PrinterOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons'
+import { SendOutlined, EyeOutlined, CloseCircleOutlined, PrinterOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons'
+import WorkOrderFormModal, { useWorkOrderForm } from '../components/WorkOrderFormModal'
 import { getWorkOrders, dispatchWorkOrder, updateWorkOrderStatusWithReason, getInstallers } from '../api/workOrder'
 import { OrderStatusTag } from '../components/StatusTag'
 import ServiceOrderPrint from '../components/ServiceOrderPrint'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
 
 const statusSteps = ['待派工', '已派工', '安装中', '已安装', '已完成']
 const STATUS_OPTIONS = ['', '待派工', '已派工', '安装中', '已安装', '失败'].map((s) => ({ value: s, label: s || '全部状态' }))
 
 export default function DispatchList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [installers, setInstallers] = useState([])
   const [keyword, setKeyword] = useState('')
@@ -22,18 +24,33 @@ export default function DispatchList() {
   const [current, setCurrent] = useState(null)
   const [form] = Form.useForm()
   const [failForm] = Form.useForm()
+  const { modalOpen, editing, openCreate, openEdit, closeModal } = useWorkOrderForm()
 
-  const load = async () => {
+  const load = async (opts = {}) => {
+    const kw = opts.keyword ?? keyword
+    const status = opts.status ?? statusFilter
     setLoading(true)
     try {
       const params = {}
-      if (keyword) params.keyword = keyword
-      if (statusFilter) params.status = statusFilter
+      if (kw) params.keyword = kw
+      if (status) params.status = status
       const res = await getWorkOrders(params)
       setData(res.list.filter((o) => o.status !== '已完成' && o.status !== '已取消'))
     } finally {
       setLoading(false)
     }
+  }
+
+  const onStatusChange = (v) => {
+    const status = v || ''
+    setStatusFilter(status)
+    load({ keyword, status })
+  }
+
+  const handleReset = () => {
+    setKeyword('')
+    setStatusFilter('')
+    load({ keyword: '', status: '' })
   }
 
   useEffect(() => { load(); getInstallers().then(setInstallers) }, [])
@@ -64,11 +81,16 @@ export default function DispatchList() {
     { title: '安装人员', dataIndex: 'installer', width: 80, render: (v) => v || <Tag>未分配</Tag> },
     { title: '状态', dataIndex: 'status', width: 90, render: (s) => <OrderStatusTag status={s} /> },
     {
-      title: '操作', width: 260, fixed: 'right',
+      title: '操作', width: 300, fixed: 'right',
       render: (_, record) => (
         <Space size="small" wrap>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => { setCurrent(record); setDetailModal(true) }}>详情</Button>
           <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => { setCurrent(record); setPrintOpen(true) }}>打印</Button>
+          {record.status === '待派工' && (
+            <Permission code="workorder:edit">
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>编辑</Button>
+            </Permission>
+          )}
           {(record.status === '待派工' || record.status === '失败') && (
             <Permission code="workorder:dispatch">
               <Button type="link" size="small" icon={<SendOutlined />} onClick={() => { setCurrent(record); form.setFieldsValue({ installer: record.installer }); setDispatchModal(true) }}>派工</Button>
@@ -140,13 +162,21 @@ export default function DispatchList() {
         <h2>派工管理</h2>
         <p>派单给安装人员，跟踪流转记录与状态</p>
       </div>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input placeholder="工单号 / 客户 / 店名" value={keyword} onChange={(e) => setKeyword(e.target.value)}
-          onPressEnter={load} style={{ width: 220 }} allowClear />
-        <Select value={statusFilter} onChange={setStatusFilter} options={STATUS_OPTIONS} style={{ width: 120 }} />
-        <Button type="primary" icon={<SearchOutlined />} onClick={load}>查询</Button>
-        <Button icon={<ReloadOutlined />} onClick={() => { setKeyword(''); setStatusFilter(''); setTimeout(load, 0) }}>重置</Button>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput placeholder="工单号 / 客户 / 店名" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={() => load()} />
+            <FilterSelect value={statusFilter} onChange={onStatusChange} options={STATUS_OPTIONS} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <Permission code="workorder:create">
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
+          </Permission>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 1200 }} pagination={{ pageSize: 10 }} />
 
       <Modal title="派工" open={dispatchModal} onOk={handleDispatch} onCancel={() => setDispatchModal(false)} destroyOnClose>
@@ -171,6 +201,8 @@ export default function DispatchList() {
       </Modal>
 
       <ServiceOrderPrint open={printOpen} order={current} onClose={() => setPrintOpen(false)} />
+
+      <WorkOrderFormModal open={modalOpen} editing={editing} onCancel={closeModal} onSuccess={load} />
     </div>
   )
 }

@@ -1,39 +1,57 @@
 import { useEffect, useState } from 'react'
-import { Table, Input, Button, Space, Tag, Modal, Form, Select, Timeline, message, Popconfirm, Dropdown } from 'antd'
-import { SearchOutlined, PhoneOutlined, PlusOutlined, RollbackOutlined, WechatOutlined, FileAddOutlined, DownOutlined } from '@ant-design/icons'
+import { Table, Input, Button, Space, Tag, Modal, Form, Select, Timeline, message, Popconfirm, Dropdown, Upload } from 'antd'
+import { PhoneOutlined, PlusOutlined, RollbackOutlined, WechatOutlined, FileAddOutlined, DownOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
-import { getCustomers, getFollowUps, createFollowUp, returnCustomer, updateCustomer } from '../api'
+import { getCustomers, getFollowUps, createFollowUp, returnCustomer, updateCustomer, createCustomer, importMyCustomers } from '../api'
+import { downloadCsvTemplate, parseCsvFile } from '../utils/csvImport'
 import { callPhone } from '../components/PhoneBar'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, QueryButton, ResetButton } from '../components/ListToolbar'
 import { useAuth } from '../hooks/useAuth'
+import { openCreateForm, closeFormModal } from '../utils/formModal'
 
 const STATUS_COLOR = { 正常: 'success', 中断合作: 'error', 待跟进: 'warning' }
 const CONTACT_STATUSES = ['正常', '中断合作', '待跟进']
+const PHONE_RULE = [{ pattern: /^1\d{10}$/, message: '请输入11位手机号' }]
+const MY_CUSTOMER_TEMPLATE = {
+  filename: '我的客户导入模板.csv',
+  headers: ['店名', '客户名称', '联系人', '手机号', '地址'],
+  keys: ['storeName', 'customerName', 'contact', 'phone', 'address'],
+  sample: ['红渡小香', '智慧社区A区物业', '小王', '13800138000', '示例地址'],
+  required: ['storeName', 'customerName'],
+}
 
 export default function MyCustomerList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [keyword, setKeyword] = useState('')
   const [followModal, setFollowModal] = useState(false)
   const [wechatModal, setWechatModal] = useState(false)
   const [current, setCurrent] = useState(null)
   const [followUps, setFollowUps] = useState([])
+  const [createModal, setCreateModal] = useState(false)
   const [form] = Form.useForm()
   const [wechatForm] = Form.useForm()
+  const [createForm] = Form.useForm()
   const { user } = useAuth()
   const navigate = useNavigate()
 
-  const load = async () => {
+  const load = async (kw = keyword) => {
     setLoading(true)
     try {
       const params = {}
       if (user.role === 'sales') params.salesName = user.name
-      if (keyword) params.keyword = keyword
+      if (kw) params.keyword = kw
       const res = await getCustomers(params)
       setData(res.list)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleReset = () => {
+    setKeyword('')
+    load('')
   }
 
   useEffect(() => { load() }, [])
@@ -79,6 +97,32 @@ export default function MyCustomerList() {
     message.success('微信号已记录')
     setWechatModal(false)
     load()
+  }
+
+  const handleCreate = async () => {
+    const values = await createForm.validateFields()
+    await createCustomer({ ...values, salesName: user.name, source: '自建' })
+    message.success('客户已添加')
+    closeFormModal(createForm, setCreateModal)
+    load()
+  }
+
+  const openCreate = () => {
+    openCreateForm(createForm)
+    setCreateModal(true)
+  }
+
+  const handleImport = async (file) => {
+    try {
+      const text = await file.text()
+      const rows = parseCsvFile(text, MY_CUSTOMER_TEMPLATE)
+      const res = await importMyCustomers(rows, user.name)
+      message.success(`成功导入 ${res.count} 条客户`)
+      load()
+    } catch (e) {
+      message.error(e.message || '导入失败')
+    }
+    return false
   }
 
   const createWorkOrder = (record) => {
@@ -136,10 +180,28 @@ export default function MyCustomerList() {
         <h2>我的客户</h2>
         <p>销售私海客户，支持外呼、跟进、微信、建工单、退回公海</p>
       </div>
-      <Space style={{ marginBottom: 16 }}>
-        <Input placeholder="搜索客户" prefix={<SearchOutlined />} value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: 240 }} allowClear />
-        <Button type="primary" onClick={load}>查询</Button>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput placeholder="搜索客户/店名" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={() => load()} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <>
+            <Permission code="customer:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增客户</Button>
+            </Permission>
+            <Permission code="customer:import">
+              <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(MY_CUSTOMER_TEMPLATE)}>导入模板</Button>
+              <Upload showUploadList={false} accept=".csv" beforeUpload={handleImport}>
+                <Button icon={<UploadOutlined />}>导入</Button>
+              </Upload>
+            </Permission>
+          </>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} scroll={{ x: 1200 }} />
 
       <Modal title={`跟进记录 — ${current?.customerName}`} open={followModal} onCancel={() => setFollowModal(false)} footer={null} width={640}>
@@ -157,6 +219,16 @@ export default function MyCustomerList() {
           </Form.Item>
           <Form.Item name="nextPlan"><Input placeholder="下次计划" style={{ width: 120 }} /></Form.Item>
           <Form.Item><Button type="primary" icon={<PlusOutlined />} onClick={handleAddFollow}>添加</Button></Form.Item>
+        </Form>
+      </Modal>
+
+      <Modal title="新增客户" open={createModal} onOk={handleCreate} onCancel={() => closeFormModal(createForm, setCreateModal)} destroyOnClose>
+        <Form form={createForm} layout="vertical" style={{ marginTop: 16 }} preserve={false}>
+          <Form.Item name="storeName" label="店名" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="customerName" label="客户名称" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="contact" label="联系人"><Input /></Form.Item>
+          <Form.Item name="phone" label="手机号" rules={PHONE_RULE}><Input maxLength={11} /></Form.Item>
+          <Form.Item name="address" label="地址"><Input /></Form.Item>
         </Form>
       </Modal>
 

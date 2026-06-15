@@ -4,26 +4,185 @@
   padding: 20px 24px 40px;
 }
 
-.search-bar {
+.tab-bar {
+  display: flex;
+  background: #fff;
+  border-radius: 16px;
+  padding: 6px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+}
+
+.tab-item {
+  flex: 1;
+  text-align: center;
+  padding: 18px 0;
+  font-size: 28px;
+  color: $text-secondary;
+  border-radius: 12px;
+
+  &.active {
+    background: $gradient;
+    color: #fff;
+    font-weight: 600;
+  }
+}
+
+.btn-add {
+  margin-bottom: 16px;
+  background: $gradient;
+  color: #fff;
+  border-radius: 12px;
+  font-size: 28px;
+}
+
+.btn-claim {
+  margin-top: 16px;
+  background: $gradient;
+  color: #fff;
+  border-radius: 8px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+}
+
+.card-title {
+  font-size: 30px;
+  font-weight: 600;
+}
+
+.card-row {
+  display: flex;
+  margin-top: 8px;
+  font-size: 26px;
+}
+
+.label {
+  width: 140px;
+  color: $text-secondary;
+}
+
+.status-tag {
+  font-size: 22px;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.status-done { background: #ecfdf5; color: #059669; }
+.status-installing { background: #eff6ff; color: #2563eb; }
+.status-fail { background: #fef2f2; color: #dc2626; }
+
+.empty {
+  text-align: center;
+  color: $text-secondary;
+  padding: 60px 0;
+  font-size: 28px;
+}
+
+.search-card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+}
+
+.search-header {
   display: flex;
   align-items: center;
-  background: #fff;
-  border-radius: 12px;
-  padding: 12px 20px;
-  margin-bottom: 20px;
-  border: 2px solid rgba(99, 102, 241, 0.12);
+  justify-content: space-between;
+  min-height: 48px;
 }
 
-.search-input {
+.search-header-left {
   flex: 1;
-  font-size: 28px;
 }
 
-.search-btn {
-  color: $primary;
-  font-size: 28px;
+.search-title {
+  font-size: 32px;
   font-weight: 600;
-  padding-left: 20px;
+  color: $text;
+}
+
+.search-summary {
+  display: block;
+  margin-top: 6px;
+  font-size: 24px;
+  color: $primary;
+}
+
+.search-arrow {
+  font-size: 24px;
+  color: $text-secondary;
+  transition: transform 0.2s;
+  padding: 8px 4px;
+  margin-left: 16px;
+
+  &.open {
+    transform: rotate(90deg);
+  }
+}
+
+.search-body {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #f1f5f9;
+}
+
+.field {
+  margin-bottom: 20px;
+}
+
+.field-label {
+  display: block;
+  font-size: 24px;
+  color: $text-secondary;
+  margin-bottom: 8px;
+}
+
+.field-input {
+  height: 80px;
+  padding: 0 24px;
+  background: #f8f7ff;
+  border-radius: 12px;
+  font-size: 28px;
+  border: 2px solid rgba(99, 102, 241, 0.1);
+}
+
+.search-actions {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+}
+
+.btn-search,
+.btn-reset {
+  flex: 1;
+  height: 80px;
+  line-height: 80px;
+  border-radius: 40px;
+  font-size: 28px;
+  border: none;
+
+  &::after {
+    border: none;
+  }
+}
+
+.btn-search {
+  background: $gradient;
+  color: #fff;
+}
+
+.btn-reset {
+  background: #fff;
+  color: $primary;
+  border: 2px solid $primary-light;
 }
 
 .card-head {

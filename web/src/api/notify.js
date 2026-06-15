@@ -140,23 +140,42 @@ registerMock('POST', '/notifications/admin/send', async (body) => {
   return { broadcastId: id, recipientCount: recipients.length }
 })
 
-registerMock('GET', '/system/users', async () => {
+registerMock('GET', '/system/users', async (_, params = {}) => {
   await delay(50)
-  return { list: systemUsers }
+  let list = [...systemUsers]
+  const { keyword, role, enabled } = params
+  if (keyword) {
+    const kw = keyword.toLowerCase()
+    list = list.filter((u) => u.username.toLowerCase().includes(kw) || u.name.toLowerCase().includes(kw))
+  }
+  if (role) list = list.filter((u) => u.role === role)
+  if (enabled === 'true') list = list.filter((u) => u.enabled !== false)
+  if (enabled === 'false') list = list.filter((u) => u.enabled === false)
+  return { list, total: list.length }
 })
 
-registerMock('GET', '/system/roles', async () => {
+registerMock('GET', '/system/roles', async (_, params = {}) => {
   await delay(50)
-  return {
-    list: DEFAULT_ROLES.map((r) => ({
-      id: r.id,
-      name: r.name,
-      code: r.code,
-      userCount: r.userCount,
-      dataScope: r.dataScope,
-      enabled: r.enabled,
-    })),
+  let list = DEFAULT_ROLES.map((r) => ({
+    id: r.id,
+    name: r.name,
+    code: r.code,
+    userCount: r.userCount,
+    dataScope: r.dataScope,
+    enabled: r.enabled,
+    menuKeys: r.menuKeys,
+    operations: r.operations,
+    menus: r.menuKeys?.includes('*') ? '全部菜单' : `${(r.menuKeys || []).length} 项菜单`,
+  }))
+  const { keyword, dataScope, enabled } = params
+  if (keyword) {
+    const kw = keyword.toLowerCase()
+    list = list.filter((r) => r.name.toLowerCase().includes(kw) || r.code.toLowerCase().includes(kw))
   }
+  if (dataScope) list = list.filter((r) => r.dataScope === dataScope)
+  if (enabled === 'true') list = list.filter((r) => r.enabled !== false)
+  if (enabled === 'false') list = list.filter((r) => r.enabled === false)
+  return { list, total: list.length }
 })
 
 registerMock('GET', '/system/logs', async (_, params = {}) => {

@@ -10,6 +10,7 @@ export interface AuthUser {
   name: string
   role: string
   enabled: boolean
+  wxBound?: boolean
 }
 
 export interface Permissions {
@@ -66,4 +67,24 @@ export function isSales(): boolean {
 
 export function isInstaller(): boolean {
   return getUser()?.role === 'installer'
+}
+
+export function canDispatch(): boolean {
+  return hasOperation('workorder:dispatch')
+}
+
+export function canTrace(): boolean {
+  return hasOperation('trace:view') || hasOperation('customer:view') || hasOperation('workorder:view')
+}
+
+export function canViewFinance(): boolean {
+  return hasOperation('finance:view')
+}
+
+export function canViewContract(): boolean {
+  return hasOperation('contract:view')
+}
+
+export function isAdmin(): boolean {
+  return getUser()?.role === 'admin'
 }

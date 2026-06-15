@@ -1,3 +1,3 @@
 export default definePageConfig({
-  navigationBarTitleText: '安装登记',
+  navigationBarTitleText: '安装派单',
 })

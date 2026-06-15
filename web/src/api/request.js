@@ -30,6 +30,9 @@ export async function request(url, options = {}) {
   if (USE_MOCK) {
     const handler = mockHandlers[`${method} ${path}`]
     if (handler) {
+      if (method === 'GET') {
+        await new Promise((r) => setTimeout(r, 250))
+      }
       const body = options.body ? JSON.parse(options.body) : {}
       return handler(body, queryParams)
     }

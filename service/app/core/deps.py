@@ -50,3 +50,17 @@ def require_operations(*codes: str):
         return permissions
 
     return checker
+
+
+def require_menu(*menu_keys: str):
+    """校验菜单权限（防直连接口绕过前端路由）"""
+
+    def checker(permissions: dict = Depends(get_current_permissions)) -> dict:
+        menus = permissions.get("menuKeys") or []
+        if "*" in menus:
+            return permissions
+        if not any(key in menus for key in menu_keys):
+            raise BizError("无菜单权限", 403)
+        return permissions
+
+    return checker

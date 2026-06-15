@@ -1,0 +1,74 @@
+@import '../../styles/variables.scss';
+
+.notifications-page {
+  padding: 24px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 0 8px;
+}
+
+.unread-tip {
+  font-size: 26px;
+  color: $primary;
+}
+
+.read-all {
+  font-size: 26px;
+  color: $primary-light;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 16px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+
+  &.unread {
+    border-left: 6px solid $primary;
+  }
+}
+
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.type-tag {
+  font-size: 22px;
+  color: $primary;
+  background: #eef2ff;
+  padding: 4px 12px;
+  border-radius: 8px;
+}
+
+.time {
+  font-size: 22px;
+  color: $text-secondary;
+}
+
+.title {
+  display: block;
+  font-size: 30px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.content {
+  font-size: 26px;
+  color: $text-secondary;
+  line-height: 1.5;
+}
+
+.empty {
+  text-align: center;
+  color: $text-secondary;
+  padding: 80px 0;
+  font-size: 28px;
+}

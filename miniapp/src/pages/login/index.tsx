@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { View, Input, Button, Text } from '@tarojs/components'
 import Taro from '@tarojs/taro'
-import { login } from '@/api/auth'
+import { login, wechatLogin } from '@/api/auth'
 import { saveAuth, getHomeTab } from '@/utils/auth'
 import './index.scss'
 
@@ -56,14 +56,17 @@ export default function LoginPage() {
         Taro.showToast({ title: '获取微信授权失败', icon: 'none' })
         return
       }
+      afterLogin(await wechatLogin(code))
+    } catch (e) {
+      const msg = (e as Error).message
       Taro.showModal({
         title: '微信登录',
-        content: '授权已获取，待后端绑定 open_id 后自动登录。请暂时切换为账号登录。',
+        content: msg.includes('未绑定')
+          ? `${msg}\n\n请切换账号登录后，在「我的」中绑定微信。`
+          : msg,
         showCancel: false,
-        success: () => setMode('account'),
+        success: () => { if (msg.includes('未绑定')) setMode('account') },
       })
-    } catch (e) {
-      Taro.showToast({ title: (e as Error).message, icon: 'none' })
     } finally {
       setWxLoading(false)
     }

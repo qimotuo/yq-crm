@@ -1,14 +1,15 @@
 import { useEffect, useState } from 'react'
-import { Table, Button, Space, Tag, Modal, Form, Input, Select, DatePicker, message, Alert } from 'antd'
+import { Table, Button, Tag, Modal, Form, Input, Select, DatePicker, message, Alert } from 'antd'
 import { PlusOutlined, BellOutlined, CheckOutlined } from '@ant-design/icons'
 import { getSchedules, createSchedule, completeSchedule } from '../api/notify'
 import { useAuth } from '../hooks/useAuth'
+import { ListToolbar, QueryButton, ResetButton, FilterSelect } from '../components/ListToolbar'
 import dayjs from 'dayjs'
 
 const typeColors = { 上门: 'blue', 电话: 'green', 安装: 'orange' }
 
 export default function ScheduleList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [statusFilter, setStatusFilter] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -16,20 +17,31 @@ export default function ScheduleList() {
   const { user } = useAuth()
   const today = dayjs().format('YYYY-MM-DD')
 
-  const load = async () => {
+  const load = async (status = statusFilter) => {
     setLoading(true)
     try {
       const res = await getSchedules({})
       let list = res.list
       if (user.role === 'sales') list = list.filter((s) => s.salesName === user.name)
-      if (statusFilter) list = list.filter((s) => s.status === statusFilter)
+      if (status) list = list.filter((s) => s.status === status)
       setData(list)
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [statusFilter])
+  const onStatusChange = (v) => {
+    const status = v || ''
+    setStatusFilter(status)
+    load(status)
+  }
+
+  const handleReset = () => {
+    setStatusFilter('')
+    load('')
+  }
+
+  useEffect(() => { load() }, [])
 
   const todayList = data.filter((s) => s.date === today && s.status === '待执行')
 
@@ -78,11 +90,19 @@ export default function ScheduleList() {
           description={todayList.map((s) => `${s.time} ${s.title}（${s.customerName}）`).join(' · ')} />
       )}
 
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Select placeholder="状态筛选" value={statusFilter || undefined} onChange={setStatusFilter} allowClear style={{ width: 120 }}
-          options={['待执行', '已完成'].map((v) => ({ value: v, label: v }))} />
-        <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>添加日程</Button>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterSelect placeholder="状态筛选" value={statusFilter || undefined} onChange={onStatusChange}
+              options={['待执行', '已完成'].map((v) => ({ value: v, label: v }))} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>添加日程</Button>
+        )}
+      />
 
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
 

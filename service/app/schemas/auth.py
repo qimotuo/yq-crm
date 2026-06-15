@@ -6,6 +6,10 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class WechatCodeRequest(BaseModel):
+    code: str = Field(..., min_length=1)
+
+
 class RoleUpdateRequest(BaseModel):
     id: int
     name: str | None = None

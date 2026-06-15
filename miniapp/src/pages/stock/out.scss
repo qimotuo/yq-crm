@@ -1,0 +1,56 @@
+@import '../../styles/variables.scss';
+
+.stock-out-page {
+  padding: 24px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16px;
+  padding: 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.08);
+}
+
+.section-title {
+  font-size: 30px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.form-item {
+  margin-bottom: 20px;
+}
+
+.form-label {
+  display: block;
+  font-size: 24px;
+  color: $text-secondary;
+  margin-bottom: 8px;
+}
+
+.form-input {
+  height: 80px;
+  padding: 0 24px;
+  background: #f8f7ff;
+  border-radius: 12px;
+  font-size: 28px;
+  border: 2px solid rgba(99, 102, 241, 0.1);
+}
+
+.picker-value {
+  line-height: 80px;
+}
+
+.btn-primary {
+  background: $gradient;
+  color: #fff;
+  border-radius: 12px;
+  margin-top: 12px;
+}
+
+.hint {
+  font-size: 24px;
+  color: $text-secondary;
+  margin-bottom: 16px;
+}

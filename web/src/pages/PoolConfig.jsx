@@ -5,11 +5,15 @@ import { getPoolConfig, updatePoolConfig, getReturnLogs } from '../api'
 
 export default function PoolConfig() {
   const [loading, setLoading] = useState(false)
+  const [logsLoading, setLogsLoading] = useState(true)
   const [config, setConfig] = useState(null)
   const [logs, setLogs] = useState([])
   const [form] = Form.useForm()
 
-  const loadLogs = () => getReturnLogs().then((res) => setLogs(res.list))
+  const loadLogs = () => {
+    setLogsLoading(true)
+    getReturnLogs().then((res) => setLogs(res.list)).finally(() => setLogsLoading(false))
+  }
 
   useEffect(() => {
     getPoolConfig().then((data) => { setConfig(data); form.setFieldsValue(data) })
@@ -79,7 +83,7 @@ export default function PoolConfig() {
       )}
 
       <Card title="退回记录留痕">
-        <Table columns={logColumns} dataSource={logs} rowKey="id" size="small" pagination={{ pageSize: 8 }} />
+        <Table columns={logColumns} dataSource={logs} rowKey="id" size="small" loading={logsLoading} pagination={{ pageSize: 8 }} />
       </Card>
     </div>
   )

@@ -35,7 +35,7 @@ def _format_role_list_item(role: Role, user_count: int) -> dict:
         "code": role.code,
         "menuKeys": menu_keys,
         "operations": role.operations or [],
-        "dataScope": SCOPE_LABEL.get(role.data_scope, role.data_scope),
+        "dataScope": role.data_scope,
         "enabled": role.enabled,
         "userCount": user_count,
         "menus": menus,
@@ -68,9 +68,23 @@ def get_role_by_code(db: Session, code: str) -> Role | None:
     return db.query(Role).filter(Role.code == code).first()
 
 
-def list_roles(db: Session) -> dict:
+def list_roles(
+    db: Session,
+    *,
+    keyword: str = "",
+    data_scope: str = "",
+    enabled: str = "",
+) -> dict:
+    q = db.query(Role)
+    if keyword:
+        like = f"%{keyword}%"
+        q = q.filter((Role.name.ilike(like)) | (Role.code.ilike(like)))
+    if data_scope:
+        q = q.filter(Role.data_scope == data_scope)
+    if enabled in ("true", "false"):
+        q = q.filter(Role.enabled == (enabled == "true"))
     counts = _role_counts(db)
-    roles = db.query(Role).order_by(Role.id).all()
+    roles = q.order_by(Role.id).all()
     items = [_format_role_list_item(r, counts.get(r.code, 0)) for r in roles]
     return {"list": items, "total": len(items)}
 
@@ -131,8 +145,22 @@ def get_permissions_by_role(db: Session, role_code: str) -> dict | None:
     return {"role": role.code, **perms}
 
 
-def list_users(db: Session) -> dict:
-    users = db.query(User).order_by(User.id).all()
+def list_users(
+    db: Session,
+    *,
+    keyword: str = "",
+    role: str = "",
+    enabled: str = "",
+) -> dict:
+    q = db.query(User)
+    if keyword:
+        like = f"%{keyword}%"
+        q = q.filter((User.username.ilike(like)) | (User.name.ilike(like)))
+    if role:
+        q = q.filter(User.role_code == role)
+    if enabled in ("true", "false"):
+        q = q.filter(User.enabled == (enabled == "true"))
+    users = q.order_by(User.id).all()
     items = [_user_dict(u) for u in users]
     return {"list": items, "total": len(items)}
 

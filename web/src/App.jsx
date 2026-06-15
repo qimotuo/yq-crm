@@ -21,6 +21,8 @@ import RoleList from './pages/RoleList'
 import ContractList from './pages/ContractList'
 import PoolConfig from './pages/PoolConfig'
 import FollowUpList from './pages/FollowUpList'
+import AccountLedger from './pages/AccountLedger'
+import AdminLedger from './pages/AdminLedger'
 import Profile from './pages/Profile'
 import OperationLogList from './pages/OperationLogList'
 import NotificationManage from './pages/NotificationManage'
@@ -53,6 +55,8 @@ function App() {
           <Route path="schedules" element={<Guard path="/schedules"><ScheduleList /></Guard>} />
           <Route path="customers" element={<Guard path="/customers"><CustomerList /></Guard>} />
           <Route path="finance" element={<Guard path="/finance"><FinanceList /></Guard>} />
+          <Route path="account-ledger" element={<Guard path="/account-ledger"><AccountLedger /></Guard>} />
+          <Route path="admin-ledger" element={<Guard path="/admin-ledger"><AdminLedger /></Guard>} />
           <Route path="contracts" element={<Guard path="/contracts"><ContractList /></Guard>} />
           <Route path="integrated" element={<Guard path="/integrated"><IntegratedQuery /></Guard>} />
           <Route path="stock" element={<Guard path="/stock"><StockList /></Guard>} />

@@ -1,14 +1,16 @@
 import { useEffect, useState, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Table, Button, Space, Input, Select, Modal, Form, DatePicker, message, Popconfirm, Descriptions } from 'antd'
-import { PlusOutlined, SearchOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons'
+import { PlusOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons'
 import { getWorkOrders, createWorkOrder, deleteWorkOrder, updateWorkOrder } from '../api/workOrder'
 import { OrderStatusTag } from '../components/StatusTag'
 import ServiceOrderPrint from '../components/ServiceOrderPrint'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
+import { openCreateForm, closeFormModal } from '../utils/formModal'
 
 export default function WorkOrderList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -21,17 +23,31 @@ export default function WorkOrderList() {
   const location = useLocation()
   const prefillDone = useRef(false)
 
-  const load = async () => {
+  const load = async (opts = {}) => {
+    const kw = opts.keyword ?? keyword
+    const status = opts.status ?? statusFilter
     setLoading(true)
     try {
       const params = {}
-      if (keyword) params.keyword = keyword
-      if (statusFilter) params.status = statusFilter
+      if (kw) params.keyword = kw
+      if (status) params.status = status
       const res = await getWorkOrders(params)
       setData(res.list)
     } finally {
       setLoading(false)
     }
+  }
+
+  const onStatusChange = (v) => {
+    const status = v || ''
+    setStatusFilter(status)
+    load({ keyword, status })
+  }
+
+  const handleReset = () => {
+    setKeyword('')
+    setStatusFilter('')
+    load({ keyword: '', status: '' })
   }
 
   useEffect(() => { load() }, [])
@@ -112,15 +128,22 @@ export default function WorkOrderList() {
         <h2>销售派单</h2>
         <p>销售人员创建安装工单（接单）</p>
       </div>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input placeholder="搜索工单号/客户/店名" prefix={<SearchOutlined />} value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: 240 }} allowClear />
-        <Select placeholder="工单状态" value={statusFilter || undefined} onChange={setStatusFilter} allowClear style={{ width: 130 }}
-          options={['待派工', '已派工', '安装中', '已安装', '已完成'].map((s) => ({ value: s, label: s }))} />
-        <Button type="primary" onClick={load}>查询</Button>
-        <Permission code="workorder:create">
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
-        </Permission>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput placeholder="搜索工单号/客户/店名" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={() => load()} />
+            <FilterSelect placeholder="工单状态" value={statusFilter || undefined} onChange={onStatusChange}
+              options={['待派工', '已派工', '安装中', '已安装', '已完成'].map((s) => ({ value: s, label: s }))} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <Permission code="workorder:create">
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
+          </Permission>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 1400 }} pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }} />
 
       <Modal title={editing ? '编辑工单' : '新建安装工单'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)} width={600} destroyOnClose>

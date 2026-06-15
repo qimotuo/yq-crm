@@ -1,15 +1,20 @@
+from app.core.data_scope import is_all_data_scope
 from sqlalchemy.orm import Session
 
 from app.db.models import Schedule, User
 from app.services import notify_service
 
 
-def list_schedules(db: Session, user: User, date_filter: str = "") -> dict:
+def _scoped_schedule_query(db: Session, user: User, perms: dict):
     q = db.query(Schedule)
-    if user.role_code == "sales":
-        q = q.filter(Schedule.user_id == user.id)
-    elif user.role_code not in ("admin",):
-        q = q.filter(Schedule.sales_name == user.name)
+    if is_all_data_scope(perms):
+        return q
+    return q.filter(Schedule.user_id == user.id)
+
+
+def list_schedules(db: Session, user: User, date_filter: str = "", perms: dict | None = None) -> dict:
+    perms = perms or {}
+    q = _scoped_schedule_query(db, user, perms)
     if date_filter:
         q = q.filter(Schedule.date == date_filter)
     rows = q.order_by(Schedule.date.desc(), Schedule.time).all()
@@ -64,10 +69,9 @@ def create_schedule(db: Session, user: User, data: dict) -> dict:
     return _to_dict(item)
 
 
-def complete_schedule(db: Session, user: User, schedule_id: int) -> dict:
-    q = db.query(Schedule).filter(Schedule.id == schedule_id)
-    if user.role_code == "sales":
-        q = q.filter(Schedule.user_id == user.id)
+def complete_schedule(db: Session, user: User, schedule_id: int, perms: dict | None = None) -> dict:
+    perms = perms or {}
+    q = _scoped_schedule_query(db, user, perms).filter(Schedule.id == schedule_id)
     item = q.first()
     if not item:
         from app.core.exceptions import BizError
@@ -75,7 +79,12 @@ def complete_schedule(db: Session, user: User, schedule_id: int) -> dict:
     item.status = "已完成"
     db.commit()
     db.refresh(item)
-    return _to_dict(item)
+    result = _to_dict(item)
+    from app.services import follow_up_service as follow_svc
+
+    follow = follow_svc.create_follow_up_from_schedule(db, user, item)
+    result["followUp"] = follow
+    return result
 
 
 def _to_dict(s: Schedule) -> dict:

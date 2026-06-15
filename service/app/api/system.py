@@ -22,12 +22,15 @@ router = APIRouter(prefix="/system", tags=["系统管理"])
 @router.get("/roles")
 def list_roles(
     request: Request,
+    keyword: str = "",
+    dataScope: str = "",
+    enabled: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("system:role:view", "system:role:edit")),
 ):
     log_action(db, user, "query", "系统", "查询角色列表", request=request)
-    return ok(svc.list_roles(db))
+    return ok(svc.list_roles(db, keyword=keyword, data_scope=dataScope, enabled=enabled))
 
 
 @router.get("/roles/detail")
@@ -74,6 +77,7 @@ def permissions_by_role(
     role: str = Query(...),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("system:role:view", "system:role:edit")),
 ):
     return ok(svc.get_permissions_by_role(db, role))
 
@@ -81,12 +85,15 @@ def permissions_by_role(
 @router.get("/users")
 def list_users(
     request: Request,
+    keyword: str = "",
+    role: str = "",
+    enabled: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("system:user:view", "system:user:create", "system:user:edit")),
 ):
     log_action(db, user, "query", "系统", "查询用户列表", request=request)
-    return ok(svc.list_users(db))
+    return ok(svc.list_users(db, keyword=keyword, role=role, enabled=enabled))
 
 
 @router.post("/users")

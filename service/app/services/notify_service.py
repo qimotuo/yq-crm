@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.core.exceptions import BizError
 from app.core.notify_templates import list_miniprogram_templates, list_site_templates, render_notify
-from app.db.models import Notification, NotificationBroadcast, Schedule, User
+from app.db.models import Notification, NotificationBroadcast, Role, Schedule, User
 
 
 def _format_time(dt: datetime) -> str:
@@ -45,6 +45,7 @@ def send_from_template(
     source_type: str = "",
     source_id: int | None = None,
     dedupe: bool = False,
+    path_override: str | None = None,
 ) -> Notification:
     if dedupe and source_type and source_id is not None:
         exists = (
@@ -61,6 +62,8 @@ def send_from_template(
             return exists
 
     rendered = render_notify(template_code, context)
+    if path_override:
+        rendered["path"] = path_override
     item = Notification(
         user_id=user_id,
         type=rendered["type"],
@@ -75,6 +78,52 @@ def send_from_template(
     db.commit()
     db.refresh(item)
     return item
+
+
+def users_with_operation(db: Session, operation: str) -> list[User]:
+    roles = db.query(Role).filter(Role.enabled.is_(True)).all()
+    role_codes = {
+        r.code for r in roles
+        if "*" in (r.operations or []) or operation in (r.operations or [])
+    }
+    if not role_codes:
+        return []
+    return (
+        db.query(User)
+        .filter(User.enabled.is_(True), User.role_code.in_(role_codes))
+        .all()
+    )
+
+
+def notify_users_with_operation(
+    db: Session,
+    operation: str,
+    *,
+    template_code: str,
+    context: dict | None = None,
+    source_type: str = "",
+    source_id: int | None = None,
+    path_override: str | None = None,
+    exclude_user_ids: list[int] | None = None,
+    dedupe: bool = True,
+) -> int:
+    excluded = set(exclude_user_ids or [])
+    count = 0
+    for user in users_with_operation(db, operation):
+        if user.id in excluded:
+            continue
+        send_from_template(
+            db,
+            user_id=user.id,
+            template_code=template_code,
+            context=context,
+            source_type=source_type,
+            source_id=source_id,
+            path_override=path_override,
+            dedupe=dedupe,
+        )
+        count += 1
+    return count
 
 
 def list_for_user(db: Session, user_id: int) -> dict:
@@ -237,5 +286,6 @@ def ensure_schedule_reminders(db: Session, user_id: int) -> None:
             },
             source_type="schedule",
             source_id=s.id,
+            path_override="/pages/schedules/index",
             dedupe=True,
         )

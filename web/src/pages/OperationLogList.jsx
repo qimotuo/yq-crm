@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
-import { Table, Input, Select, Space, Tag } from 'antd'
+import { Table, Tag } from 'antd'
 import { getOperationLogs } from '../api/notify'
+import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
 
 const actionColors = {
   login: 'green',
@@ -13,20 +14,21 @@ const actionColors = {
 }
 
 export default function OperationLogList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [keyword, setKeyword] = useState('')
   const [action, setAction] = useState('')
   const [module, setModule] = useState('')
+  const [query, setQuery] = useState({ keyword: '', action: '', module: '' })
 
-  const load = (p = page) => {
+  const load = (p = page, q = query) => {
     setLoading(true)
     const params = { page: p, size: 20 }
-    if (keyword) params.keyword = keyword
-    if (action) params.action = action
-    if (module) params.module = module
+    if (q.keyword) params.keyword = q.keyword
+    if (q.action) params.action = q.action
+    if (q.module) params.module = q.module
     getOperationLogs(params)
       .then((res) => {
         setData(res.list)
@@ -34,6 +36,30 @@ export default function OperationLogList() {
         setPage(res.page)
       })
       .finally(() => setLoading(false))
+  }
+
+  const searchWith = (next) => {
+    setQuery(next)
+    load(1, next)
+  }
+
+  const onSelectFilter = (key) => (v) => {
+    const value = v || ''
+    const next = { keyword, action, module, [key]: value }
+    if (key === 'action') setAction(value)
+    if (key === 'module') setModule(value)
+    searchWith(next)
+  }
+
+  const handleSearch = () => searchWith({ keyword, action, module })
+
+  const handleReset = () => {
+    setKeyword('')
+    setAction('')
+    setModule('')
+    const empty = { keyword: '', action: '', module: '' }
+    setQuery(empty)
+    load(1, empty)
   }
 
   useEffect(() => { load(1) }, [])
@@ -60,36 +86,35 @@ export default function OperationLogList() {
         <p>记录用户在系统中的登录、查询、派工、接单等操作</p>
       </div>
 
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input.Search
-          placeholder="搜索用户/详情"
-          allowClear
-          style={{ width: 220 }}
-          onSearch={(v) => { setKeyword(v); load(1) }}
-        />
-        <Select
-          allowClear
-          placeholder="操作类型"
-          style={{ width: 120 }}
-          onChange={(v) => { setAction(v || ''); setTimeout(() => load(1)) }}
-          options={[
-            { value: 'login', label: '登录' },
-            { value: 'query', label: '查询' },
-            { value: 'create', label: '新增' },
-            { value: 'update', label: '修改' },
-            { value: 'delete', label: '删除' },
-            { value: 'dispatch', label: '派工' },
-            { value: 'install', label: '安装登记' },
-          ]}
-        />
-        <Select
-          allowClear
-          placeholder="模块"
-          style={{ width: 120 }}
-          onChange={(v) => { setModule(v || ''); setTimeout(() => load(1)) }}
-          options={['系统', '工单', '日程'].map((v) => ({ value: v, label: v }))}
-        />
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput placeholder="搜索用户/详情" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={handleSearch} />
+            <FilterSelect
+              placeholder="操作类型"
+              value={action || undefined}
+              onChange={onSelectFilter('action')}
+              options={[
+                { value: 'login', label: '登录' },
+                { value: 'query', label: '查询' },
+                { value: 'create', label: '新增' },
+                { value: 'update', label: '修改' },
+                { value: 'delete', label: '删除' },
+                { value: 'dispatch', label: '派工' },
+                { value: 'install', label: '安装登记' },
+              ]}
+            />
+            <FilterSelect
+              placeholder="模块"
+              value={module || undefined}
+              onChange={onSelectFilter('module')}
+              options={['系统', '工单', '日程'].map((v) => ({ value: v, label: v }))}
+            />
+            <QueryButton loading={loading} onClick={handleSearch} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+      />
 
       <Table
         rowKey="id"

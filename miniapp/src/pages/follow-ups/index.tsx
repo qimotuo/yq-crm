@@ -75,7 +75,7 @@ export default function FollowUpsPage() {
           </View>
           <View className='form-item'>
             <Text className='form-label'>下次计划</Text>
-            <Input className='form-input' value={form.nextPlan} placeholder='如 2026-10-28 回访'
+            <Input className='form-input' value={form.nextPlan} placeholder='如 2026-10-28 14:00 回访'
               onInput={(e) => setForm({ ...form, nextPlan: e.detail.value })} />
           </View>
           <Button className='btn-primary' onClick={handleSubmit}>保存</Button>

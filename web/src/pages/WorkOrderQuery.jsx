@@ -1,8 +1,11 @@
 import { useState } from 'react'
-import { Table, Input, Button, Space, Select, Modal, Descriptions, Timeline, Tag } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
+import { Table, Button, Modal, Descriptions, Timeline, Tag, Space } from 'antd'
+import { PlusOutlined, EditOutlined } from '@ant-design/icons'
 import { queryWorkOrders } from '../api/workOrder'
 import { OrderStatusTag } from '../components/StatusTag'
+import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
+import WorkOrderFormModal, { useWorkOrderForm } from '../components/WorkOrderFormModal'
 
 const SEARCH_TYPES = [
   { value: 'keyword', label: '客户/工单号', placeholder: '客户名称、店名、工单号' },
@@ -18,17 +21,31 @@ export default function WorkOrderQuery() {
   const [searchType, setSearchType] = useState('keyword')
   const [keyword, setKeyword] = useState('')
   const [detail, setDetail] = useState(null)
+  const { modalOpen, editing, openCreate, openEdit, closeModal } = useWorkOrderForm()
 
-  const handleSearch = async () => {
-    if (!keyword.trim()) return
+  const runSearch = async (type, kw) => {
+    if (!kw.trim()) return
     setLoading(true)
     try {
-      const params = { [searchType]: keyword.trim() }
+      const params = { [type]: kw.trim() }
       const res = await queryWorkOrders(params)
       setData(res.list)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSearch = () => runSearch(searchType, keyword)
+
+  const onSearchTypeChange = (type) => {
+    setSearchType(type)
+    runSearch(type, keyword)
+  }
+
+  const handleReset = () => {
+    setSearchType('keyword')
+    setKeyword('')
+    setData([])
   }
 
   const placeholder = SEARCH_TYPES.find((t) => t.value === searchType)?.placeholder
@@ -43,8 +60,17 @@ export default function WorkOrderQuery() {
     { title: 'ICCID', dataIndex: 'iccid', width: 150, ellipsis: true, render: (v) => v || '-' },
     { title: '状态', dataIndex: 'status', width: 90, render: (s) => <OrderStatusTag status={s} /> },
     {
-      title: '操作', width: 80,
-      render: (_, r) => <Button type="link" size="small" onClick={() => setDetail(r)}>详情</Button>,
+      title: '操作', width: 120,
+      render: (_, r) => (
+        <Space size="small">
+          <Button type="link" size="small" onClick={() => setDetail(r)}>详情</Button>
+          {r.status === '待派工' && (
+            <Permission code="workorder:edit">
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+            </Permission>
+          )}
+        </Space>
+      ),
     },
   ]
 
@@ -54,13 +80,22 @@ export default function WorkOrderQuery() {
         <h2>工单查询</h2>
         <p>按 MAC、SIM、设备型号、客户、工单号、合同号检索</p>
       </div>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Select value={searchType} onChange={setSearchType} style={{ width: 130 }}
-          options={SEARCH_TYPES.map((t) => ({ value: t.value, label: t.label }))} />
-        <Input placeholder={placeholder} value={keyword} onChange={(e) => setKeyword(e.target.value)}
-          onPressEnter={handleSearch} style={{ width: 280 }} allowClear />
-        <Button type="primary" icon={<SearchOutlined />} onClick={handleSearch}>查询</Button>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterSelect wide value={searchType} onChange={onSearchTypeChange}
+              options={SEARCH_TYPES.map((t) => ({ value: t.value, label: t.label }))} />
+            <FilterInput placeholder={placeholder} value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={handleSearch} />
+            <QueryButton loading={loading} onClick={handleSearch} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <Permission code="workorder:create">
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
+          </Permission>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading}
         locale={{ emptyText: '输入条件后点击查询' }} scroll={{ x: 1100 }} pagination={{ pageSize: 10 }} />
 
@@ -93,6 +128,13 @@ export default function WorkOrderQuery() {
           </>
         )}
       </Modal>
+
+      <WorkOrderFormModal
+        open={modalOpen}
+        editing={editing}
+        onCancel={closeModal}
+        onSuccess={() => keyword.trim() && handleSearch()}
+      />
     </div>
   )
 }

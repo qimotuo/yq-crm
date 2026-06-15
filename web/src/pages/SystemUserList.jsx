@@ -5,24 +5,57 @@ import { getSystemUsers, createSystemUser, updateSystemUser, deleteSystemUser, r
 import ExportButton from '../components/ExportButton'
 import { Permission } from '../components/RequireAuth'
 import { ROLE_COLORS } from '../rbac/config'
+import { closeFormModal } from '../utils/formModal'
+import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton, applyFilterPatch } from '../components/ListToolbar'
+
+const EMPTY_FILTERS = { keyword: '', role: '', enabled: '' }
+
+function buildQueryParams(query) {
+  const params = {}
+  Object.entries(query).forEach(([key, value]) => {
+    if (value) params[key] = value
+  })
+  return params
+}
 
 export default function SystemUserList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const [total, setTotal] = useState(0)
   const [roles, setRoles] = useState([])
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+  const [query, setQuery] = useState({ ...EMPTY_FILTERS })
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form] = Form.useForm()
 
-  const load = () => {
+  const load = async (params = query) => {
     setLoading(true)
-    getSystemUsers().then((res) => setData(res.list)).finally(() => setLoading(false))
+    try {
+      const res = await getSystemUsers(buildQueryParams(params))
+      setData(res.list)
+      setTotal(res.total ?? res.list.length)
+    } finally {
+      setLoading(false)
+    }
   }
 
+  useEffect(() => { load() }, [query])
+
   useEffect(() => {
-    load()
     getRoles().then((res) => setRoles(res.list))
   }, [])
+
+  const handleSearch = () => setQuery({ ...filters })
+
+  const handleReset = () => {
+    setFilters({ ...EMPTY_FILTERS })
+    setQuery({ ...EMPTY_FILTERS })
+  }
+
+  const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
+
+  const onSelectFilter = (key) => (v) => applyFilterPatch({ [key]: v || '' }, setFilters, setQuery)
 
   const openCreate = () => {
     setEditing(null)
@@ -36,6 +69,8 @@ export default function SystemUserList() {
     setModalOpen(true)
   }
 
+  const closeModal = () => closeFormModal(form, setModalOpen, () => setEditing(null))
+
   const handleSave = async () => {
     const values = await form.validateFields()
     if (editing) {
@@ -45,8 +80,7 @@ export default function SystemUserList() {
       await createSystemUser(values)
       message.success('用户已创建，默认密码 123456')
     }
-    setModalOpen(false)
-    form.resetFields()
+    closeModal()
     load()
   }
 
@@ -115,16 +149,55 @@ export default function SystemUserList() {
         <h2>用户管理</h2>
         <p>系统用户与角色分配</p>
       </div>
-      <div style={{ marginBottom: 16, display: 'flex', gap: 8 }}>
-        <Permission code="system:user:create">
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增用户</Button>
-        </Permission>
-        <ExportButton filename="users.csv" />
-      </div>
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={false} />
 
-      <Modal title={editing ? '编辑用户' : '新增用户'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)} destroyOnClose>
-        <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput
+              placeholder="用户名/姓名"
+              value={filters.keyword}
+              onChange={(e) => setFilter('keyword', e.target.value)}
+              onPressEnter={handleSearch}
+            />
+            <FilterSelect
+              placeholder="角色"
+              value={filters.role || undefined}
+              onChange={onSelectFilter('role')}
+              options={roleOptions}
+            />
+            <FilterSelect
+              placeholder="状态"
+              value={filters.enabled || undefined}
+              onChange={onSelectFilter('enabled')}
+              options={[
+                { value: 'true', label: '启用' },
+                { value: 'false', label: '禁用' },
+              ]}
+            />
+            <QueryButton loading={loading} onClick={handleSearch} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <>
+            <Permission code="system:user:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增用户</Button>
+            </Permission>
+            <ExportButton filename="users.csv" />
+          </>
+        )}
+      />
+
+      <Table
+        columns={columns}
+        dataSource={data}
+        rowKey="id"
+        loading={loading}
+        pagination={{ total, showTotal: (t) => `共 ${t} 条` }}
+      />
+
+      <Modal title={editing ? '编辑用户' : '新增用户'} open={modalOpen} onOk={handleSave} onCancel={closeModal} destroyOnClose>
+        <Form form={form} layout="vertical" style={{ marginTop: 16 }} preserve={false}>
           <Form.Item name="username" label="用户名" rules={[{ required: true }]}>
             <Input disabled={!!editing} />
           </Form.Item>

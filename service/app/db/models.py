@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, func
+from sqlalchemy import Boolean, DateTime, Float, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -32,6 +32,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(64), nullable=False)
     role_code: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    wx_open_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
@@ -84,6 +85,94 @@ class Schedule(Base):
     type: Mapped[str] = mapped_column(String(16), nullable=False, default="上门")
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="待执行")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class FollowUp(Base):
+    __tablename__ = "follow_ups"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, default=0, index=True)
+    customer_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    sales_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    type: Mapped[str] = mapped_column(String(16), nullable=False, default="电话")
+    content: Mapped[str] = mapped_column(String(512), nullable=False)
+    next_plan: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="待完成")
+    create_time: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class Customer(Base):
+    __tablename__ = "customers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    store_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    customer_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    contact: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    phone: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    address: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    sales_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
+    contact_status: Mapped[str] = mapped_column(String(16), nullable=False, default="正常")
+    order_no: Mapped[str] = mapped_column(String(32), nullable=False, default="", index=True)
+    install_date: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    device_supplier: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    device_model: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    mac: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    imei: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    sim_supplier: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    operator: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    iccid: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    backup_iccid: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    contract_period: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    invoice_type: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    claim_time: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    last_follow_time: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    wechat_id: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    source: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    finance_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    last_payment_time: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    last_payment_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
+
+
+class WorkOrder(Base):
+    __tablename__ = "work_orders"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    order_no: Mapped[str] = mapped_column(String(32), unique=True, nullable=False, index=True)
+    customer_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    sales_name: Mapped[str] = mapped_column(String(64), nullable=False, default="", index=True)
+    store_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    customer_name: Mapped[str] = mapped_column(String(128), nullable=False, default="")
+    address: Mapped[str] = mapped_column(String(256), nullable=False, default="")
+    contact: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    contact_phone: Mapped[str] = mapped_column(String(20), nullable=False, default="")
+    install_date: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    remark: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="待派工", index=True)
+    installer: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    device_supplier: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    device_model: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    mac: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    imei: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    sim_supplier: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    operator: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    iccid: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    backup_iccid: Mapped[str] = mapped_column(String(32), nullable=False, default="")
+    install_remark: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    install_time_slot: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    price: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    postpone_date: Mapped[str] = mapped_column(String(64), nullable=False, default="")
+    fail_reason: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    flow_logs: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now()
+    )
 
 
 class OperationLog(Base):

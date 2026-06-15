@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { Card, Input, Select, Button, Steps, Empty, Space, message } from 'antd'
-import { SearchOutlined } from '@ant-design/icons'
+import { Card, Steps, Empty, message } from 'antd'
 import { traceQuery } from '../api'
+import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
 
 const traceTypes = [
   { value: 'mac', label: 'MAC 地址', placeholder: 'AA:BB:CC:DD:EE:01' },
@@ -17,15 +17,31 @@ export default function ReportTrace() {
   const [result, setResult] = useState(null)
   const [loading, setLoading] = useState(false)
 
-  const handleSearch = async () => {
-    if (!value.trim()) return message.warning('请输入查询值')
+  const runSearch = async (traceType, kw) => {
+    if (!kw.trim()) return
     setLoading(true)
     try {
-      const res = await traceQuery(type, value.trim())
+      const res = await traceQuery(traceType, kw.trim())
       setResult(res)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleSearch = async () => {
+    if (!value.trim()) return message.warning('请输入查询值')
+    await runSearch(type, value)
+  }
+
+  const onTypeChange = (traceType) => {
+    setType(traceType)
+    runSearch(traceType, value)
+  }
+
+  const handleReset = () => {
+    setType('orderNo')
+    setValue('')
+    setResult(null)
   }
 
   const current = traceTypes.find((t) => t.value === type)
@@ -38,13 +54,18 @@ export default function ReportTrace() {
       </div>
 
       <Card style={{ marginBottom: 24 }}>
-        <Space wrap>
-          <Select value={type} onChange={setType} style={{ width: 160 }}
-            options={traceTypes.map((t) => ({ value: t.value, label: t.label }))} />
-          <Input placeholder={current?.placeholder} value={value} onChange={(e) => setValue(e.target.value)}
-            style={{ width: 320 }} prefix={<SearchOutlined />} onPressEnter={handleSearch} />
-          <Button type="primary" loading={loading} onClick={handleSearch}>追溯查询</Button>
-        </Space>
+        <ListToolbar
+          nested
+          filters={(
+            <>
+              <FilterSelect wide value={type} onChange={onTypeChange}
+                options={traceTypes.map((t) => ({ value: t.value, label: t.label }))} />
+              <FilterInput placeholder={current?.placeholder} value={value} onChange={(e) => setValue(e.target.value)} onPressEnter={handleSearch} />
+              <QueryButton loading={loading} onClick={handleSearch}>追溯查询</QueryButton>
+              <ResetButton onClick={handleReset} />
+            </>
+          )}
+        />
         <div style={{ marginTop: 12, color: '#999', fontSize: 12 }}>
           演示快捷输入：智慧社区 / GD-20261025-088 / AA:BB:CC / 898601 / SH20261105001
         </div>

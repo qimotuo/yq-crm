@@ -36,6 +36,8 @@ export const MENU_TREE = [
     children: [
       { key: '/customers', label: '合作客户' },
       { key: '/finance', label: '财务板块' },
+      { key: '/account-ledger', label: '账户账本' },
+      { key: '/admin-ledger', label: '行政账本' },
       { key: '/contracts', label: '合同管理' },
       { key: '/integrated', label: '关联查询' },
       { key: '/report-trace', label: '全链路追溯' },
@@ -78,6 +80,9 @@ export const OPERATION_GROUPS = [
       { code: 'customer:return', label: '退回公海' },
       { code: 'customer:follow', label: '跟进记录' },
       { code: 'customer:call', label: '外呼' },
+      { code: 'schedule:view', label: '查看日程' },
+      { code: 'schedule:create', label: '新增日程' },
+      { code: 'schedule:edit', label: '完成日程' },
     ],
   },
   {
@@ -96,9 +101,36 @@ export const OPERATION_GROUPS = [
     module: '财务模块',
     ops: [
       { code: 'finance:view', label: '查看财务' },
+      { code: 'finance:create', label: '新增账单' },
+      { code: 'finance:import', label: '导入账单' },
       { code: 'finance:payment', label: '录入回款' },
       { code: 'finance:send', label: '发送对账单' },
       { code: 'finance:export', label: '导出账单' },
+    ],
+  },
+  {
+    module: '账户账本',
+    ops: [
+      { code: 'account-ledger:view', label: '查看账户账本' },
+      { code: 'account-ledger:create', label: '记账' },
+      { code: 'account-ledger:delete', label: '删除记录' },
+    ],
+  },
+  {
+    module: '行政账本',
+    ops: [
+      { code: 'admin-ledger:view', label: '查看行政账本' },
+      { code: 'admin-ledger:create', label: '记账' },
+      { code: 'admin-ledger:delete', label: '删除记录' },
+    ],
+  },
+  {
+    module: '合同模块',
+    ops: [
+      { code: 'contract:view', label: '查看合同' },
+      { code: 'contract:create', label: '新增合同' },
+      { code: 'contract:import', label: '导入合同' },
+      { code: 'contract:generate', label: '生成合同' },
     ],
   },
   {
@@ -109,6 +141,10 @@ export const OPERATION_GROUPS = [
       { code: 'stock:out', label: '出库' },
       { code: 'stock:export', label: '导出' },
     ],
+  },
+  {
+    module: '报表追溯',
+    ops: [{ code: 'trace:view', label: '全链路追溯' }],
   },
 ]
 
@@ -133,19 +169,19 @@ export const DEFAULT_ROLES = [
   {
     id: 2, name: '销售', code: 'sales', userCount: 3,
     menuKeys: ['/dashboard', '/public-pool', '/my-customers', '/contacts', '/follow-ups', '/schedules', '/work-orders', '/stock', '/customers'],
-    operations: ['customer:view', 'customer:create', 'customer:import', 'customer:claim', 'customer:return', 'customer:follow', 'customer:call', 'workorder:view', 'workorder:create', 'workorder:edit', 'workorder:delete', 'workorder:print', 'stock:view', 'stock:out'],
+    operations: ['customer:view', 'customer:create', 'customer:import', 'customer:claim', 'customer:return', 'customer:follow', 'customer:call', 'schedule:view', 'schedule:create', 'schedule:edit', 'workorder:view', 'workorder:create', 'workorder:edit', 'workorder:delete', 'workorder:print', 'stock:view', 'stock:out', 'finance:view', 'contract:view', 'trace:view'],
     dataScope: 'SELF', enabled: true,
   },
   {
     id: 3, name: '安装人员', code: 'installer', userCount: 3,
     menuKeys: ['/dashboard', '/install-register', '/stock'],
-    operations: ['workorder:view', 'workorder:install', 'stock:view'],
+    operations: ['workorder:view', 'workorder:install', 'stock:view', 'stock:out', 'trace:view'],
     dataScope: 'ASSIGNED', enabled: true,
   },
   {
     id: 4, name: '财务', code: 'finance', userCount: 1,
     menuKeys: ['/dashboard', '/customers', '/finance', '/contracts', '/integrated', '/report-trace'],
-    operations: ['customer:view', 'finance:view', 'finance:payment', 'finance:send', 'finance:export'],
+    operations: ['customer:view', 'finance:view', 'finance:create', 'finance:import', 'finance:payment', 'finance:send', 'finance:export', 'contract:view', 'contract:create', 'contract:import', 'contract:generate', 'trace:view'],
     dataScope: 'ALL', enabled: true,
   },
   {
@@ -154,6 +190,21 @@ export const DEFAULT_ROLES = [
     operations: ['stock:view', 'stock:in', 'stock:out', 'stock:export'],
     dataScope: 'ALL', enabled: true,
   },
+  {
+    id: 6, name: '账户负责人', code: 'account_owner', userCount: 1,
+    menuKeys: ['/dashboard', '/account-ledger'],
+    operations: ['account-ledger:view', 'account-ledger:create', 'account-ledger:delete'],
+    dataScope: 'ALL', enabled: true,
+  },
+  {
+    id: 7, name: '行政', code: 'admin_staff', userCount: 1,
+    menuKeys: ['/dashboard', '/admin-ledger'],
+    operations: ['admin-ledger:view', 'admin-ledger:create', 'admin-ledger:delete'],
+    dataScope: 'ALL', enabled: true,
+  },
 ]
 
-export const ROLE_COLORS = { admin: 'red', sales: 'blue', installer: 'green', finance: 'gold', warehouse: 'purple' }
+export const ROLE_COLORS = {
+  admin: 'red', sales: 'blue', installer: 'green', finance: 'gold', warehouse: 'purple',
+  account_owner: 'magenta', admin_staff: 'cyan',
+}

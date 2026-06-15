@@ -202,8 +202,8 @@ export const stockInList = [
 ]
 
 export const stockOutList = [
-  { id: 1, outNo: 'CK20261027001', outDate: '2026-10-27', orderNo: 'GD-20261025-088', storeName: '红渡小香', customerName: '智慧社区A区物业', address: 'A区3栋1单元门禁处', model: '鲲鹏618', imei: '865432041234567', mac: 'AA:BB:CC:DD:EE:01', iccid: '89860123456789012345', operator: '中国移动', receiver: '张三', remark: '首批试点安装' },
-  { id: 2, outNo: 'CK20261027002', outDate: '2026-10-27', orderNo: 'GD-20261026-092', storeName: '厚贞日式烤肉', customerName: '滨江工业园管委会', address: 'B座5层会议室监控点', model: '华为', imei: '865432041234568', mac: 'AA:BB:CC:DD:EE:02', iccid: '89860323456789012346', operator: '中国电信', receiver: '李四', remark: '需配合弱电施工' },
+  { id: 1, outNo: 'CK20261027001', outDate: '2026-10-27', orderNo: 'GD-20261025-088', storeName: '红渡小香', customerName: '智慧社区A区物业', address: 'A区3栋1单元门禁处', model: '鲲鹏618', imei: '865432041234567', mac: 'AA:BB:CC:DD:EE:01', iccid: '89860123456789012345', iccid2: '89860123456789012346', operator: '中国移动', receiver: '张三', remark: '首批试点安装' },
+  { id: 2, outNo: 'CK20261027002', outDate: '2026-10-27', orderNo: 'GD-20261026-092', storeName: '厚贞日式烤肉', customerName: '滨江工业园管委会', address: 'B座5层会议室监控点', model: '华为', imei: '865432041234568', mac: 'AA:BB:CC:DD:EE:02', iccid: '89860323456789012346', iccid2: '', operator: '中国电信', receiver: '李四', remark: '需配合弱电施工' },
 ]
 
 export const simStockInList = [
@@ -219,9 +219,9 @@ export const publicPoolCustomers = [
 ]
 
 export const followUps = [
-  { id: 1, customerId: 1, customerName: '智慧社区A区物业', salesName: '张三', type: '电话', content: '确认安装时间，客户要求加路由器', nextPlan: '2026-10-26 上门', createTime: '2026-10-25 14:30' },
-  { id: 2, customerId: 2, customerName: '滨江工业园管委会', salesName: '李四', type: '微信', content: '发送了套餐报价', nextPlan: '2026-10-28 回访', createTime: '2026-10-26 10:00' },
-  { id: 3, customerId: 4, customerName: '科技初创公司B', salesName: '赵六', type: '上门', content: '现场勘察网络环境，需10账号', nextPlan: '2026-11-01 安装', createTime: '2026-10-30 16:20' },
+  { id: 1, customerId: 1, customerName: '智慧社区A区物业', salesName: '张三', type: '电话', content: '确认安装时间，客户要求加路由器', nextPlan: '2026-10-26 上门', status: '已完成', createTime: '2026-10-25 14:30' },
+  { id: 2, customerId: 2, customerName: '滨江工业园管委会', salesName: '李四', type: '微信', content: '发送了套餐报价', nextPlan: '2026-10-28 回访', status: '待完成', createTime: '2026-10-26 10:00' },
+  { id: 3, customerId: 4, customerName: '科技初创公司B', salesName: '赵六', type: '上门', content: '现场勘察网络环境，需10账号', nextPlan: '2026-11-01 安装', status: '待完成', createTime: '2026-10-30 16:20' },
 ]
 
 export const integratedList = [
@@ -276,6 +276,8 @@ export const systemUsers = [
   { id: 3, username: 'lisi', name: '李四', role: 'sales', enabled: true },
   { id: 4, username: 'zhaoyun', name: '赵云', role: 'installer', enabled: true },
   { id: 5, username: 'finance', name: '财务小李', role: 'finance', enabled: true },
+  { id: 6, username: 'xiaoyi', name: '小伊姐', role: 'account_owner', enabled: true },
+  { id: 7, username: 'xingzheng', name: '行政小王', role: 'admin_staff', enabled: true },
 ]
 
 export const roles = [
@@ -284,6 +286,23 @@ export const roles = [
   { id: 3, name: '安装人员', code: 'installer', userCount: 3, menus: '派工/安装登记', dataScope: '分配给自己的工单' },
   { id: 4, name: '财务', code: 'finance', userCount: 1, menus: '财务/关联查询/报表', dataScope: '全部财务数据' },
   { id: 5, name: '仓储', code: 'warehouse', userCount: 1, menus: '设备出入库/库存', dataScope: '全部库存数据' },
+  { id: 6, name: '账户负责人', code: 'account_owner', userCount: 1, menus: '账户账本', dataScope: '账户账本' },
+  { id: 7, name: '行政', code: 'admin_staff', userCount: 1, menus: '行政账本', dataScope: '行政账本' },
+]
+
+/** 账户账本（大表）种子 */
+export const accountLedgerList = [
+  { id: 1, section: '基米网', direction: 'in', category: '无线网络入账', amount: 3200, entryDate: '2026-06-01', remark: '红渡小香', createdBy: '小伊姐', createTime: '2026-06-01 10:00' },
+  { id: 2, section: '基米网', direction: 'out', category: '流量账单', amount: 800, entryDate: '2026-06-03', remarkOption: '鲲鹏卡', remark: '', createdBy: '小伊姐', createTime: '2026-06-03 14:20' },
+  { id: 3, section: '基米智连', direction: 'in', category: '其余', amount: 1500, entryDate: '2026-06-05', remark: '设备返修退款', createdBy: '小伊姐', createTime: '2026-06-05 09:30' },
+  { id: 4, section: '基米智连', direction: 'out', category: '工资费用', amount: 12000, entryDate: '2026-06-10', remark: '6月安装组工资', createdBy: '小伊姐', createTime: '2026-06-10 16:00' },
+]
+
+/** 行政账本（小表）种子 */
+export const adminLedgerList = [
+  { id: 1, category: '日常账单', amount: 268, entryDate: '2026-06-02', remark: '办公用品采购', createdBy: '行政小王', createTime: '2026-06-02 11:00' },
+  { id: 2, category: '公司运营账单', amount: 3500, entryDate: '2026-06-08', remark: '办公室宽带年费', createdBy: '行政小王', createTime: '2026-06-08 15:30' },
+  { id: 3, category: '日常账单', amount: 120, entryDate: '2026-06-12', remark: '快递费', createdBy: '行政小王', createTime: '2026-06-12 10:20' },
 ]
 
 export const contracts = [

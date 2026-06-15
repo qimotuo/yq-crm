@@ -4,6 +4,19 @@ import { SafetyOutlined, EditOutlined } from '@ant-design/icons'
 import { getRoles, updateRole } from '../api'
 import { MENU_TREE, OPERATION_GROUPS, DATA_SCOPES, ROLE_COLORS, ALL_MENU_KEYS } from '../rbac/config'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton, applyFilterPatch } from '../components/ListToolbar'
+
+const EMPTY_FILTERS = { keyword: '', dataScope: '', enabled: '' }
+
+const SCOPE_LABEL = Object.fromEntries(DATA_SCOPES.map((s) => [s.value, s.label]))
+
+function buildQueryParams(query) {
+  const params = {}
+  Object.entries(query).forEach(([key, value]) => {
+    if (value) params[key] = value
+  })
+  return params
+}
 
 function buildMenuTreeData(nodes) {
   return nodes.map((n) => ({
@@ -21,20 +34,40 @@ function getLeafKeys(keys) {
 }
 
 export default function RoleList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const [total, setTotal] = useState(0)
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+  const [query, setQuery] = useState({ ...EMPTY_FILTERS })
   const [editing, setEditing] = useState(null)
   const [menuKeys, setMenuKeys] = useState([])
   const [operations, setOperations] = useState([])
   const [dataScope, setDataScope] = useState('SELF')
   const [saving, setSaving] = useState(false)
 
-  const load = () => {
+  const load = async (params = query) => {
     setLoading(true)
-    getRoles().then((res) => setData(res.list)).finally(() => setLoading(false))
+    try {
+      const res = await getRoles(buildQueryParams(params))
+      setData(res.list)
+      setTotal(res.total ?? res.list.length)
+    } finally {
+      setLoading(false)
+    }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => { load() }, [query])
+
+  const handleSearch = () => setQuery({ ...filters })
+
+  const handleReset = () => {
+    setFilters({ ...EMPTY_FILTERS })
+    setQuery({ ...EMPTY_FILTERS })
+  }
+
+  const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
+
+  const onSelectFilter = (key) => (v) => applyFilterPatch({ [key]: v || '' }, setFilters, setQuery)
 
   const openEdit = (role) => {
     setEditing(role)
@@ -66,7 +99,18 @@ export default function RoleList() {
     { title: '角色编码', dataIndex: 'code', width: 100, render: (c) => <Tag color={ROLE_COLORS[c]}>{c}</Tag> },
     { title: '用户数', dataIndex: 'userCount', width: 80 },
     { title: '菜单权限', dataIndex: 'menus', width: 120 },
-    { title: '数据权限', dataIndex: 'dataScope', width: 100 },
+    {
+      title: '数据权限',
+      dataIndex: 'dataScope',
+      width: 100,
+      render: (v) => SCOPE_LABEL[v] || v,
+    },
+    {
+      title: '状态',
+      dataIndex: 'enabled',
+      width: 80,
+      render: (v) => <Tag color={v !== false ? 'green' : 'default'}>{v !== false ? '启用' : '禁用'}</Tag>,
+    },
     {
       title: '操作', width: 120,
       render: (_, r) => (
@@ -87,7 +131,44 @@ export default function RoleList() {
         <h2>角色权限管理</h2>
         <p>菜单权限 + 操作权限 + 数据权限（RBAC）</p>
       </div>
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={false} />
+
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput
+              placeholder="角色名称/编码"
+              value={filters.keyword}
+              onChange={(e) => setFilter('keyword', e.target.value)}
+              onPressEnter={handleSearch}
+            />
+            <FilterSelect
+              placeholder="数据权限"
+              value={filters.dataScope || undefined}
+              onChange={onSelectFilter('dataScope')}
+              options={DATA_SCOPES.map((s) => ({ value: s.value, label: s.label }))}
+            />
+            <FilterSelect
+              placeholder="状态"
+              value={filters.enabled || undefined}
+              onChange={onSelectFilter('enabled')}
+              options={[
+                { value: 'true', label: '启用' },
+                { value: 'false', label: '禁用' },
+              ]}
+            />
+            <QueryButton loading={loading} onClick={handleSearch} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+      />
+
+      <Table
+        columns={columns}
+        dataSource={data}
+        rowKey="id"
+        loading={loading}
+        pagination={{ total, showTotal: (t) => `共 ${t} 条` }}
+      />
 
       <Drawer
         title={<><SafetyOutlined /> 配置权限 — {editing?.name}</>}

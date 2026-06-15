@@ -1,28 +1,43 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Space, Input, Tag, Modal, Form, message, Upload, Switch } from 'antd'
-import { PlusOutlined, SearchOutlined, PhoneOutlined, UploadOutlined, EditOutlined } from '@ant-design/icons'
+import { PlusOutlined, PhoneOutlined, UploadOutlined, EditOutlined, DownloadOutlined } from '@ant-design/icons'
 import { getContacts, createContact, updateContact, importContacts } from '../api'
 import { callPhone } from '../components/PhoneBar'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, QueryButton, ResetButton } from '../components/ListToolbar'
+import { downloadCsvTemplate, parseCsvFile } from '../utils/csvImport'
+
+const CONTACT_TEMPLATE = {
+  filename: '联系人导入模板.csv',
+  headers: ['客户名称', '店名', '姓名', '手机号', '职务', '主联系人'],
+  keys: ['customerName', 'storeName', 'name', 'phone', 'title', 'isPrimary'],
+  sample: ['智慧社区A区物业', '红渡小香', '小王', '13800138000', '物业经理', '是'],
+  required: ['customerName', 'name', 'phone'],
+}
 
 const PHONE_RULE = [{ pattern: /^1\d{10}$/, message: '请输入11位手机号' }]
 
 export default function ContactList() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [keyword, setKeyword] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
   const [form] = Form.useForm()
 
-  const load = async () => {
+  const load = async (kw = keyword) => {
     setLoading(true)
     try {
-      const res = await getContacts(keyword ? { keyword } : {})
+      const res = await getContacts(kw ? { keyword: kw } : {})
       setData(res.list)
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleReset = () => {
+    setKeyword('')
+    load('')
   }
 
   useEffect(() => { load() }, [])
@@ -44,10 +59,17 @@ export default function ContactList() {
     load()
   }
 
-  const handleImport = async () => {
-    const res = await importContacts()
-    message.success(`成功导入 ${res.count} 条联系人`)
-    load()
+  const handleImport = async (file) => {
+    try {
+      const text = await file.text()
+      const rows = parseCsvFile(text, CONTACT_TEMPLATE)
+      const res = await importContacts(rows)
+      message.success(`成功导入 ${res.count} 条联系人`)
+      load()
+    } catch (e) {
+      message.error(e.message || '导入失败')
+    }
+    return false
   }
 
   const columns = [
@@ -69,16 +91,26 @@ export default function ContactList() {
         <h2>联系人管理</h2>
         <p>维护客户联系人信息，支持新增、编辑、导入与外呼</p>
       </div>
-      <Space style={{ marginBottom: 16 }} wrap>
-        <Input placeholder="搜索姓名/客户/手机" prefix={<SearchOutlined />} value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ width: 240 }} allowClear />
-        <Button type="primary" onClick={load}>查询</Button>
-        <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增联系人</Button>
-        <Permission code="customer:import">
-          <Upload showUploadList={false} beforeUpload={() => { handleImport(); return false }}>
-            <Button icon={<UploadOutlined />}>导入 Excel</Button>
-          </Upload>
-        </Permission>
-      </Space>
+      <ListToolbar
+        filters={(
+          <>
+            <FilterInput placeholder="搜索姓名/客户/手机" value={keyword} onChange={(e) => setKeyword(e.target.value)} onPressEnter={() => load()} />
+            <QueryButton loading={loading} onClick={() => load()} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+        actions={(
+          <>
+            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增联系人</Button>
+            <Permission code="customer:import">
+              <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(CONTACT_TEMPLATE)}>下载模板</Button>
+              <Upload showUploadList={false} accept=".csv" beforeUpload={handleImport}>
+                <Button icon={<UploadOutlined />}>导入 Excel</Button>
+              </Upload>
+            </Permission>
+          </>
+        )}
+      />
       <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
 
       <Modal title={editing ? '编辑联系人' : '新增联系人'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)} destroyOnClose>

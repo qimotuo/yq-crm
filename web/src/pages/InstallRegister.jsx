@@ -1,15 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Table, Button, Modal, Form, Input, Select, message, Descriptions, Tag, Upload, Tabs, Space } from 'antd'
-import { FormOutlined, CameraOutlined, PlayCircleOutlined, CloseCircleOutlined } from '@ant-design/icons'
+import { FormOutlined, CameraOutlined, PlayCircleOutlined, CloseCircleOutlined, PlusOutlined, EditOutlined } from '@ant-design/icons'
 import { getMyWorkOrders, installRegister, updateWorkOrderStatusWithReason } from '../api/workOrder'
 import { OrderStatusTag } from '../components/StatusTag'
 import { Permission } from '../components/RequireAuth'
 import { useAuth } from '../hooks/useAuth'
+import WorkOrderFormModal, { useWorkOrderForm } from '../components/WorkOrderFormModal'
 
 const TAB_STATUS = { all: null, assigned: '已派工', installing: '安装中', done: '已安装' }
 
 export default function InstallRegister() {
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [tab, setTab] = useState('all')
   const [modalOpen, setModalOpen] = useState(false)
@@ -18,6 +19,7 @@ export default function InstallRegister() {
   const [form] = Form.useForm()
   const [failForm] = Form.useForm()
   const { user } = useAuth()
+  const { modalOpen: formModalOpen, editing, openCreate, openEdit, closeModal } = useWorkOrderForm()
 
   const load = async () => {
     setLoading(true)
@@ -80,9 +82,14 @@ export default function InstallRegister() {
     { title: '预约', dataIndex: 'installDate', width: 100 },
     { title: '状态', dataIndex: 'status', width: 90, render: (s) => <OrderStatusTag status={s} /> },
     {
-      title: '操作', width: 200,
+      title: '操作', width: 260,
       render: (_, r) => (
         <Space size="small" wrap>
+          {r.status === '待派工' && (
+            <Permission code="workorder:edit">
+              <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+            </Permission>
+          )}
           {r.status === '已派工' && (
             <Permission code="workorder:install">
               <Button type="link" size="small" icon={<PlayCircleOutlined />} onClick={() => handleStart(r)}>开始安装</Button>
@@ -113,9 +120,14 @@ export default function InstallRegister() {
 
   return (
     <div>
-      <div className="page-header">
-        <h2>我的工单 / 安装登记</h2>
-        <p>查看派单、现场登记设备信息（Web 模拟小程序端）</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div>
+          <h2>我的工单 / 安装登记</h2>
+          <p>查看派单、现场登记设备信息（Web 模拟小程序端）</p>
+        </div>
+        <Permission code="workorder:create">
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
+        </Permission>
       </div>
       <Tabs activeKey={tab} onChange={setTab} items={tabItems} style={{ marginBottom: 16 }} />
       <Table columns={columns} dataSource={filtered} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
@@ -154,6 +166,8 @@ export default function InstallRegister() {
           </Form.Item>
         </Form>
       </Modal>
+
+      <WorkOrderFormModal open={formModalOpen} editing={editing} onCancel={closeModal} onSuccess={load} />
     </div>
   )
 }

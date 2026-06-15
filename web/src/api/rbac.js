@@ -1,7 +1,10 @@
 import { request } from './request'
 
-export function getRoles() {
-  return request('/system/roles')
+export function getRoles(params = {}) {
+  const qs = new URLSearchParams()
+  Object.entries(params).forEach(([k, v]) => { if (v) qs.set(k, v) })
+  const q = qs.toString()
+  return request(`/system/roles${q ? `?${q}` : ''}`)
 }
 
 export function getRoleDetail(idOrCode) {

@@ -3,11 +3,15 @@ export default defineAppConfig({
     'pages/login/index',
     'pages/login/protocol',
     'pages/orders/index',
+    'pages/orders/dispatch-detail',
     'pages/orders/detail',
     'pages/customers/index',
     'pages/customers/detail',
     'pages/follow-ups/index',
     'pages/schedules/index',
+    'pages/notifications/index',
+    'pages/stock/out',
+    'pages/trace/index',
     'pages/profile/index',
   ],
   window: {
@@ -24,7 +28,7 @@ export default defineAppConfig({
     list: [
       {
         pagePath: 'pages/orders/index',
-        text: '安装登记',
+        text: '安装派单',
         iconPath: 'assets/tab/order.png',
         selectedIconPath: 'assets/tab/order-active.png',
       },
