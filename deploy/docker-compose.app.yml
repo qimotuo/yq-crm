@@ -1,0 +1,58 @@
+# 仅 API + Web，用法: ./app.sh up
+# 前置: ./db.sh up
+
+name: yq-crm
+
+networks:
+  yqcrm:
+    external: true
+    name: yq-crm_net
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.api
+    container_name: yq-crm-api
+    restart: unless-stopped
+    networks: [yqcrm]
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-yqcrm}:${POSTGRES_PASSWORD:-yqcrm}@yq-crm-db:5432/${POSTGRES_DB:-yq_crm}
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY:-yq-crm-docker-secret-change-me}
+      JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
+      DEBUG: ${DEBUG:-false}
+      TZ: Asia/Shanghai
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-10}
+    ports:
+      - "${API_PORT:-127.0.0.1:5172}:8000"
+    volumes:
+      - ${HOST_UPLOAD_DIR:-/data/yq-crm/uploads}:/app/uploads
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile.web
+      args:
+        VITE_USE_MOCK: "false"
+        VITE_API_BASE: /api
+        NGINX_CONF: nginx.internal.conf
+    container_name: yq-crm-web
+    restart: unless-stopped
+    networks: [yqcrm]
+    ports:
+      - "${WEB_HTTP_PORT:-127.0.0.1:5173}:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1/crm/ >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 15s
+    depends_on:
+      - api

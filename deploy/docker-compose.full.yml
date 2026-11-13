@@ -36,11 +36,15 @@ services:
       JWT_EXPIRE_MINUTES: ${JWT_EXPIRE_MINUTES:-10080}
       DEBUG: ${DEBUG:-false}
       TZ: Asia/Shanghai
+      UPLOAD_DIR: ${UPLOAD_DIR:-/app/uploads}
+      UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-10}
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "${API_PORT:-5172}:8000"
+      - "${API_PORT:-127.0.0.1:5172}:8000"
+    volumes:
+      - ${HOST_UPLOAD_DIR:-/data/yq-crm/uploads}:/app/uploads
     healthcheck:
       test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\""]
       interval: 10s
@@ -58,7 +62,10 @@ services:
     container_name: yq-crm-web
     restart: unless-stopped
     ports:
-      - "${WEB_PORT:-5173}:80"
+      - "${WEB_HTTP_PORT:-80}:80"
+      - "${WEB_HTTPS_PORT:-443}:443"
+    volumes:
+      - ${SSL_CERT_DIR:-/etc/nginx/certs}:/etc/nginx/certs:ro
     depends_on:
       api:
         condition: service_healthy

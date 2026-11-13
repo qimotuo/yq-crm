@@ -1,0 +1,11 @@
+# 外部 Nginx 反代模式（SSL 由外部 nginx 处理）
+# 用法: docker compose -f docker-compose.full.yml -f docker-compose.proxy.yml up -d --build
+
+services:
+  web:
+    build:
+      args:
+        NGINX_CONF: nginx.internal.conf
+    ports: !override
+      - "${WEB_HTTP_PORT:-127.0.0.1:5173}:80"
+    volumes: !reset []
