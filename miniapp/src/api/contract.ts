@@ -5,6 +5,10 @@ export interface ContractRecord {
   contractNo: string
   orderNo: string
   customerName: string
+  signerName?: string
+  signerPhone?: string
+  signerIdNo?: string
+  signDate?: string
   storeName: string
   package: string
   amount: number

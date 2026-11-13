@@ -23,6 +23,9 @@ export default function StockOutPage() {
     customerName: '',
     address: '',
     remark: '',
+    mobileNo: '',
+    telecomNo: '',
+    replacedCardNo: '',
   })
 
   useDidShow(() => {
@@ -47,6 +50,9 @@ export default function StockOutPage() {
       storeName: p.storeName ? decodeURIComponent(p.storeName) : '',
       customerName: p.customerName ? decodeURIComponent(p.customerName) : '',
       address: p.address ? decodeURIComponent(p.address) : '',
+      mobileNo: p.mobileNo ? decodeURIComponent(p.mobileNo) : '',
+      telecomNo: p.telecomNo ? decodeURIComponent(p.telecomNo) : '',
+      replacedCardNo: p.replacedCardNo ? decodeURIComponent(p.replacedCardNo) : '',
       remark: '',
     })
     if (p.operator) {
@@ -101,6 +107,22 @@ export default function StockOutPage() {
         <View className='form-item'>
           <Text className='form-label'>IMEI</Text>
           <Input className='form-input' value={form.imei} onInput={(e) => setField('imei', e.detail.value)} />
+        </View>
+        <View className='form-item'>
+          <Text className='form-label'>店名</Text>
+          <Input className='form-input' value={form.storeName} onInput={(e) => setField('storeName', e.detail.value)} />
+        </View>
+        <View className='form-item'>
+          <Text className='form-label'>移动卡号</Text>
+          <Input className='form-input' value={form.mobileNo} onInput={(e) => setField('mobileNo', e.detail.value)} />
+        </View>
+        <View className='form-item'>
+          <Text className='form-label'>电信卡号</Text>
+          <Input className='form-input' value={form.telecomNo} onInput={(e) => setField('telecomNo', e.detail.value)} />
+        </View>
+        <View className='form-item'>
+          <Text className='form-label'>已更换旧卡号</Text>
+          <Input className='form-input' value={form.replacedCardNo} onInput={(e) => setField('replacedCardNo', e.detail.value)} />
         </View>
         <View className='form-item'>
           <Text className='form-label'>主卡 ICCID</Text>
