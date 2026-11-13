@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
-from app.core.audit import log_action
+from app.core.audit import log_action, log_change
 from app.core.data_scope import (
     assert_work_order_access,
     can_override_installation_edit,
@@ -13,6 +13,7 @@ from app.core.response import ok
 from app.db.models import User
 from app.db.session import get_db
 from app.services import notify_service, work_order_service as svc
+from app.services.change_log import WORK_ORDER_LABELS, diff_records
 
 router = APIRouter(tags=["工单"])
 
@@ -21,8 +22,8 @@ def _find_user_by_name(db: Session, name: str) -> User | None:
     return db.query(User).filter(User.name == name).first()
 
 
-def _scoped_list(result: dict, user: User, perms: dict) -> dict:
-    items = filter_work_orders(result["list"], user, perms)
+def _scoped_list(result: dict, user: User, perms: dict, db: Session) -> dict:
+    items = filter_work_orders(result["list"], user, perms, db)
     return {"list": items, "total": len(items)}
 
 
@@ -31,21 +32,28 @@ def get_work_orders(
     request: Request,
     keyword: str = "",
     status: str = "",
+    installer: str = "",
+    installDateFrom: str = "",
+    installDateTo: str = "",
+    deviceModel: str = "",
     mac: str = "",
     iccid: str = "",
     contractNo: str = "",
-    deviceModel: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:view")),
+    perms: dict = Depends(require_operations(
+        "workorder:view", "install:view", "dispatch:view", "workorder-query:view",
+    )),
 ):
-    log_action(
-        db, user, "query", "工单",
-        f"查询工单 keyword={keyword or '-'} status={status or '-'}",
-        request=request,
-    )
-    result = svc.list_work_orders(db, keyword, status, mac, iccid, contractNo, deviceModel)
-    return ok(_scoped_list(result, user, perms))
+    filters = {
+        "keyword": keyword, "status": status, "installer": installer,
+        "installDateFrom": installDateFrom, "installDateTo": installDateTo,
+        "deviceModel": deviceModel, "mac": mac, "iccid": iccid, "contractNo": contractNo,
+    }
+    active = " ".join(f"{k}={v}" for k, v in filters.items() if v) or "全部"
+    log_action(db, user, "query", "工单", f"查询工单 {active}"[:500], request=request)
+    result = svc.list_work_orders(db, filters=filters)
+    return ok(_scoped_list(result, user, perms, db))
 
 
 @router.post("/work-orders")
@@ -54,7 +62,9 @@ def create_work_order(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    __: dict = Depends(require_operations("workorder:create")),
+    __: dict = Depends(require_operations(
+        "workorder:create", "dispatch:create", "install:create", "workorder-query:create",
+    )),
 ):
     item = svc.create_work_order(db, body, sales_name=user.name)
     log_action(db, user, "create", "工单", f"创建工单 {item['orderNo']}", request=request)
@@ -86,10 +96,10 @@ def dispatch(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:dispatch")),
+    perms: dict = Depends(require_operations("workorder:dispatch", "dispatch:assign")),
 ):
     order = svc.get_installation(db, body["id"])
-    assert_work_order_access(order, user, perms)
+    assert_work_order_access(order, user, perms, db)
     item = svc.dispatch_work_order(db, body["id"], body["installer"], operator=user.name)
     log_action(
         db, user, "dispatch", "工单",
@@ -116,10 +126,13 @@ def update_status(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:edit", "workorder:install")),
+    perms: dict = Depends(require_operations(
+        "workorder:edit", "workorder:install", "dispatch:edit", "dispatch:confirm",
+        "install:edit", "install:start", "install:fail", "workorder-query:edit",
+    )),
 ):
     order = svc.get_installation(db, body["id"])
-    assert_work_order_access(order, user, perms)
+    assert_work_order_access(order, user, perms, db)
     item = svc.update_status(db, body["id"], body["status"], body.get("failReason", ""), operator=user.name)
     log_action(db, user, "update", "工单", f"更新状态 {item['orderNo']} → {body['status']}", request=request)
     return ok(item)
@@ -131,13 +144,20 @@ def update_order(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:edit")),
+    perms: dict = Depends(require_operations(
+        "workorder:edit", "dispatch:edit", "install:edit", "workorder-query:edit",
+    )),
 ):
-    order = svc.get_installation(db, body["id"])
-    assert_work_order_access(order, user, perms)
+    before = svc.get_installation(db, body["id"])
+    assert_work_order_access(before, user, perms, db)
     oid = body.pop("id")
+    if not is_all_data_scope(perms):
+        body.pop("salesName", None)
     item = svc.update_work_order(db, oid, body)
-    log_action(db, user, "update", "工单", f"编辑工单 {item['orderNo']}", request=request)
+    log_change(
+        db, user, "工单", item["id"], f"修改工单 {item['orderNo']}",
+        diff_records(before, item, WORK_ORDER_LABELS), request=request,
+    )
     return ok(item)
 
 
@@ -147,10 +167,10 @@ def install_register(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:install")),
+    perms: dict = Depends(require_operations("workorder:install", "install:register")),
 ):
     order = svc.get_installation(db, body["id"])
-    assert_work_order_access(order, user, perms)
+    assert_work_order_access(order, user, perms, db)
     oid = body.pop("id")
     item = svc.install_register(db, oid, body, operator=user.name)
     log_action(db, user, "install", "工单", f"安装登记 {item['orderNo']}", request=request)
@@ -169,13 +189,20 @@ def install_register(
 def my_orders(
     request: Request,
     installer: str = "",
+    keyword: str = "",
+    status: str = "",
+    installDate: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:view", "workorder:install")),
+    perms: dict = Depends(require_operations("workorder:view", "install:view", "workorder:install")),
 ):
-    log_action(db, user, "query", "工单", "查询我的工单", request=request)
-    name = installer if is_all_data_scope(perms) and installer else user.name
-    return ok(svc.list_my_orders(db, name))
+    log_action(
+        db, user, "query", "工单",
+        f"查询我的工单 keyword={keyword or '-'} status={status or '-'} installDate={installDate or '-'}",
+        request=request,
+    )
+    name = "" if is_all_data_scope(perms) else (installer or user.name)
+    return ok(svc.list_my_orders(db, name, keyword, status, installDate))
 
 
 @router.get("/work-orders/my-sales")
@@ -183,7 +210,7 @@ def my_sales_orders(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    __: dict = Depends(require_operations("workorder:view", "workorder:create")),
+    __: dict = Depends(require_operations("workorder:view", "install:view", "workorder:create")),
 ):
     log_action(db, user, "query", "工单", "查询我的派单", request=request)
     return ok(svc.list_sales_orders(db, user.name))
@@ -195,10 +222,10 @@ def confirm_dispatch(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:install")),
+    perms: dict = Depends(require_operations("workorder:install", "install:start")),
 ):
     order = svc.get_installation(db, body["id"])
-    assert_work_order_access(order, user, perms)
+    assert_work_order_access(order, user, perms, db)
     item = svc.confirm_dispatch(
         db,
         body["id"],
@@ -224,7 +251,7 @@ def delete_order(
     perms: dict = Depends(require_operations("workorder:delete")),
 ):
     target = svc.get_installation(db, body["id"])
-    assert_work_order_access(target, user, perms)
+    assert_work_order_access(target, user, perms, db)
     svc.delete_work_order(db, body["id"])
     log_action(
         db, user, "delete", "工单",
@@ -239,10 +266,10 @@ def get_installation_detail(
     id: int,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:view", "workorder:install")),
+    perms: dict = Depends(require_operations("workorder:view", "install:view", "workorder:install")),
 ):
     order = svc.get_installation(db, id)
-    assert_work_order_access(order, user, perms)
+    assert_work_order_access(order, user, perms, db)
     return ok(order)
 
 
@@ -252,7 +279,7 @@ def create_installation(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    __: dict = Depends(require_operations("workorder:install")),
+    __: dict = Depends(require_operations("workorder:install", "install:register")),
 ):
     item = svc.create_installation(db, body, operator=user.name)
     log_action(db, user, "create", "安装登记", f"新增 {item['orderNo']}", request=request)
@@ -265,11 +292,11 @@ def update_installation(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:install")),
+    perms: dict = Depends(require_operations("workorder:install", "install:register")),
 ):
     oid = body.pop("id")
     order = svc.get_installation(db, oid)
-    assert_work_order_access(order, user, perms)
+    assert_work_order_access(order, user, perms, db)
     is_admin = can_override_installation_edit(perms)
     item = svc.update_installation(db, oid, body, operator=user.name, is_admin=is_admin)
     log_action(db, user, "update", "安装登记", f"修改 {item['orderNo']}", request=request)
@@ -287,7 +314,7 @@ def search_installations(
     iccid: str = "",
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    perms: dict = Depends(require_operations("workorder:view", "workorder:install")),
+    perms: dict = Depends(require_operations("workorder:view", "install:view", "workorder:install")),
 ):
     log_action(
         db, user, "query", "安装登记",
@@ -295,13 +322,15 @@ def search_installations(
         request=request,
     )
     result = svc.search_installations(db, customerName, storeName, installDate, mac, imei, iccid)
-    return ok(_scoped_list(result, user, perms))
+    return ok(_scoped_list(result, user, perms, db))
 
 
 @router.get("/installers")
 def get_installers(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    __: dict = Depends(require_operations("workorder:dispatch", "workorder:view")),
+    __: dict = Depends(require_operations(
+        "workorder:dispatch", "dispatch:assign", "dispatch:view", "workorder:view",
+    )),
 ):
-    return ok(svc.list_installers())
+    return ok(svc.list_installers(db))

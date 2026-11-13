@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import log_action
 from app.core.deps import get_current_user, require_operations
+from app.core.pagination import ensure_page_size
 from app.core.response import ok
 from app.db.models import User
 from app.db.session import get_db
@@ -45,6 +46,7 @@ def list_admin_notification_records(
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("system:notify:view", "system:notify:send")),
 ):
+    size = ensure_page_size(size)
     return ok(notify_service.list_broadcasts(db, page=page, size=size))
 
 
@@ -69,4 +71,19 @@ def send_admin_notification(
         channels=body.channels,
     )
     log_action(db, user, "create", "系统", f"发送通知「{body.title}」给 {result['recipientCount']} 人", request=request)
+    return ok(result)
+
+
+@router.post("/reminders/run")
+def run_business_reminders(
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("system:notify:send", "system:notify:view")),
+):
+    """手动触发：付费提醒 / 合同到期 / 库存不足（同日去重）。"""
+    from app.services import business_reminder_service as reminder_svc
+
+    result = reminder_svc.run_business_reminders(db)
+    log_action(db, user, "create", "系统", "手动触发业务提醒扫描", request=request)
     return ok(result)

@@ -1,4 +1,4 @@
-from app.core.data_scope import is_all_data_scope
+from app.core.data_scope import get_data_scope, is_all_data_scope, list_dept_member_ids
 from sqlalchemy.orm import Session
 
 from app.db.models import Schedule, User
@@ -9,14 +9,35 @@ def _scoped_schedule_query(db: Session, user: User, perms: dict):
     q = db.query(Schedule)
     if is_all_data_scope(perms):
         return q
+    scope = get_data_scope(perms)
+    if scope == "DEPT":
+        ids = list_dept_member_ids(db, user)
+        return q.filter(Schedule.user_id.in_(ids))
     return q.filter(Schedule.user_id == user.id)
 
 
-def list_schedules(db: Session, user: User, date_filter: str = "", perms: dict | None = None) -> dict:
+def list_schedules(
+    db: Session,
+    user: User,
+    date_filter: str = "",
+    title: str = "",
+    time: str = "",
+    type_filter: str = "",
+    status: str = "",
+    perms: dict | None = None,
+) -> dict:
     perms = perms or {}
     q = _scoped_schedule_query(db, user, perms)
     if date_filter:
         q = q.filter(Schedule.date == date_filter)
+    if title:
+        q = q.filter(Schedule.title.ilike(f"%{title}%"))
+    if time:
+        q = q.filter(Schedule.time.ilike(f"%{time}%"))
+    if type_filter:
+        q = q.filter(Schedule.type == type_filter)
+    if status:
+        q = q.filter(Schedule.status == status)
     rows = q.order_by(Schedule.date.desc(), Schedule.time).all()
     return {"list": [_to_dict(r) for r in rows], "total": len(rows)}
 

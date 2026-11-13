@@ -16,12 +16,22 @@ router = APIRouter(prefix="/schedules", tags=["日程管理"])
 def list_schedules(
     request: Request,
     date: str = Query("", alias="date"),
+    title: str = Query("", alias="title"),
+    time: str = Query("", alias="time"),
+    type: str = Query("", alias="type"),
+    status: str = Query("", alias="status"),
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
     perms: dict = Depends(require_operations("schedule:view")),
 ):
-    log_action(db, user, "query", "日程", f"查询日程 date={date or '全部'}", request=request)
-    return ok(schedule_service.list_schedules(db, user, date, perms))
+    log_action(
+        db, user, "query", "日程",
+        f"查询日程 date={date or '全部'} title={title or '-'} time={time or '-'} type={type or '-'} status={status or '-'}",
+        request=request,
+    )
+    return ok(schedule_service.list_schedules(
+        db, user, date, title=title, time=time, type_filter=type, status=status, perms=perms,
+    ))
 
 
 @router.post("")

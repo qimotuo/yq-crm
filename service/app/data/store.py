@@ -1,15 +1,14 @@
-"""内存数据层 — 练手阶段用，后续可换 SQLAlchemy + PostgreSQL"""
+"""业务种子常量 — 仅供 db/business_seed.py 首次初始化使用，运行时数据全部在 PostgreSQL"""
 
-from copy import deepcopy
 from datetime import date
 
 USERS = [
-    {"id": 1, "username": "admin", "password": "123456", "name": "管理员", "role": "admin", "enabled": True},
-    {"id": 2, "username": "zhangsan", "password": "123456", "name": "张三", "role": "sales", "enabled": True},
-    {"id": 3, "username": "zhaoyun", "password": "123456", "name": "赵云", "role": "installer", "enabled": True},
-    {"id": 4, "username": "finance", "password": "123456", "name": "财务小李", "role": "finance", "enabled": True},
-    {"id": 5, "username": "xiaoyi", "password": "123456", "name": "小伊姐", "role": "account_owner", "enabled": True},
-    {"id": 6, "username": "xingzheng", "password": "123456", "name": "行政小王", "role": "admin_staff", "enabled": True},
+    {"id": 1, "username": "admin", "password": "123456", "name": "管理员", "nickname": "超管", "role": "admin", "enabled": True, "phone": "13800000001", "email": "admin@yq-crm.com", "gender": "male", "description": "系统管理员账号", "avatar": ""},
+    {"id": 2, "username": "zhangsan", "password": "123456", "name": "张三", "nickname": "三哥", "role": "sales", "enabled": True, "phone": "13800000002", "email": "zhangsan@yq-crm.com", "gender": "male", "description": "华东区销售", "avatar": ""},
+    {"id": 3, "username": "zhaoyun", "password": "123456", "name": "赵云", "nickname": "子龙", "role": "installer", "enabled": True, "phone": "13800000004", "email": "zhaoyun@yq-crm.com", "gender": "male", "description": "安装工程师", "avatar": ""},
+    {"id": 4, "username": "finance", "password": "123456", "name": "财务小李", "nickname": "李姐", "role": "finance", "enabled": True, "phone": "13800000005", "email": "finance@yq-crm.com", "gender": "female", "description": "财务专员", "avatar": ""},
+    {"id": 5, "username": "xiaoyi", "password": "123456", "name": "小伊姐", "nickname": "伊姐", "role": "account_owner", "enabled": True, "phone": "13800000006", "email": "xiaoyi@yq-crm.com", "gender": "female", "description": "账户账本负责人", "avatar": ""},
+    {"id": 6, "username": "xingzheng", "password": "123456", "name": "行政小王", "nickname": "王哥", "role": "admin_staff", "enabled": True, "phone": "13800000007", "email": "xingzheng@yq-crm.com", "gender": "male", "description": "行政专员", "avatar": ""},
 ]
 
 WORK_ORDERS = [
@@ -94,15 +93,19 @@ WORK_ORDERS = [
 
 CONTRACTS = [
     {"id": 1, "contractNo": "SH20261105001", "orderNo": "GD-20261025-088", "customerName": "智慧社区A区物业",
+     "signerName": "小王", "signerPhone": "13800138000", "signerIdNo": "310101199001011234", "signDate": "2026-11-02",
      "storeName": "红渡小香", "package": "企业旗舰版(5账号)", "amount": 12000,
      "startDate": "2026-11-02", "endDate": "2027-11-01", "status": "正常", "cityCode": "SH"},
     {"id": 2, "contractNo": "SH20261106001", "orderNo": "GD-20261026-092", "customerName": "滨江工业园管委会",
+     "signerName": "陈经理", "signerPhone": "13900139000", "signerIdNo": "310101198505152345", "signDate": "2026-11-06",
      "storeName": "厚贞日式烤肉", "package": "标准版(2账号)", "amount": 5000,
      "startDate": "2026-11-06", "endDate": "2027-11-05", "status": "即将到期", "cityCode": "SH"},
     {"id": 3, "contractNo": "SH20261115001", "orderNo": "GD-20261027-105", "customerName": "连锁便利店总部",
+     "signerName": "刘店长", "signerPhone": "13700137000", "signerIdNo": "310101199203033456", "signDate": "2026-11-15",
      "storeName": "必三咖啡", "package": "基础版(1账号)", "amount": 2000,
      "startDate": "2026-11-15", "endDate": "2027-11-14", "status": "正常", "cityCode": "SH"},
     {"id": 4, "contractNo": "SH20261116001", "orderNo": "GD-20260101-001", "customerName": "科技初创公司B",
+     "signerName": "周总", "signerPhone": "13600136000", "signerIdNo": "310101198812124567", "signDate": "2026-11-16",
      "storeName": "稻状元", "package": "企业旗舰版(10账号)", "amount": 25000,
      "startDate": "2026-11-16", "endDate": "2027-11-15", "status": "待生成", "cityCode": "SH"},
 ]
@@ -114,7 +117,7 @@ CUSTOMERS = [
         "deviceSupplier": "鲲鹏", "deviceModel": "618", "mac": "AA:BB:CC:DD:EE:01",
         "imei": "865432041234567", "simSupplier": "光和", "operator": "移动",
         "iccid": "89860123456789012345", "iccid2": "", "backupIccid": "",
-        "contractPeriod": "2026-01-01 至 2027-01-01", "invoiceType": "增值税专用发票",
+        "contractPeriod": "2026-01-01 至 2027-01-01", "price": "5760", "invoiceType": "增值税专用发票",
         "salesName": "张三", "contactStatus": "正常", "claimTime": "2026-10-20 09:00",
         "lastFollowTime": "2026-10-25 14:30", "wechatId": "wx_xiaowang",
         "financeId": 1, "lastPaymentTime": "2026-11-05", "lastPaymentAmount": 12000,
@@ -124,7 +127,7 @@ CUSTOMERS = [
         "phone": "13900139000", "orderNo": "GD-20261026-092", "installDate": "",
         "deviceSupplier": "", "deviceModel": "", "mac": "", "imei": "", "simSupplier": "",
         "operator": "", "iccid": "", "iccid2": "", "backupIccid": "",
-        "contractPeriod": "2026-11-06 至 2027-11-05", "invoiceType": "增值税普通发票",
+        "contractPeriod": "2026-11-06 至 2027-11-05", "price": "2880x2=5760", "invoiceType": "增值税普通发票",
         "salesName": "李四", "contactStatus": "正常", "claimTime": "2026-10-21 10:30",
         "lastFollowTime": "2026-10-26 10:00", "wechatId": "",
         "financeId": 2, "lastPaymentTime": "2026-11-05", "lastPaymentAmount": 2500,
@@ -201,11 +204,13 @@ RETURN_LOGS = [
 SCHEDULES = [
     {"id": 1, "title": "拜访智慧社区A区物业", "type": "上门", "date": str(date.today()),
      "time": "14:00", "salesName": "张三", "status": "待执行"},
+    {"id": 2, "title": "回访滨江工业园", "type": "上门", "date": str(date.today()),
+     "time": "10:00", "salesName": "李四", "status": "待执行"},
 ]
 
 FINANCE = [
     {"id": 1, "storeName": "红渡小香", "customerName": "智慧社区A区物业", "orderNo": "GD-20261025-088",
-     "package": "企业旗舰版 (5账号)", "billMonth": "2026-11", "contractPeriod": "2026-11-02 至 2027-11-01",
+     "package": "企业旗舰版 (5账号)", "billMonth": "2026-06", "contractPeriod": "2026-11-02 至 2027-11-01",
      "contractStatus": "正常", "totalAmount": 12000, "paidAmount": 12000, "unpaidAmount": 0,
      "paymentStatus": "已回款", "paymentProgress": 100, "invoiceStatus": "已开票", "salesName": "张三",
      "paymentPlanDate": "2026-11-05", "lastPaymentTime": "2026-11-05",
@@ -214,7 +219,7 @@ FINANCE = [
          {"id": 2, "amount": 4000, "time": "2026-11-05", "voucher": "汇款单_4000.jpg", "verified": True},
      ]},
     {"id": 2, "storeName": "厚贞日式烤肉", "customerName": "滨江工业园管委会", "orderNo": "GD-20261026-092",
-     "package": "标准版 (2账号)", "billMonth": "2026-11", "contractPeriod": "2026-11-06 至 2027-11-05",
+     "package": "标准版 (2账号)", "billMonth": "2026-06", "contractPeriod": "2026-11-06 至 2027-11-05",
      "contractStatus": "即将到期", "totalAmount": 5000, "paidAmount": 2500, "unpaidAmount": 2500,
      "paymentStatus": "部分回款", "paymentProgress": 50, "invoiceStatus": "待开票", "salesName": "李四",
      "paymentPlanDate": "2026-11-05", "lastPaymentTime": "2026-11-05",
@@ -222,12 +227,12 @@ FINANCE = [
          {"id": 1, "amount": 2500, "time": "2026-11-05", "voucher": "汇款单_2500.jpg", "verified": False},
      ]},
     {"id": 3, "storeName": "必三咖啡", "customerName": "连锁便利店总部", "orderNo": "GD-20261027-105",
-     "package": "基础版 (1账号)", "billMonth": "2026-11", "contractPeriod": "2026-11-15 至 2027-11-14",
+     "package": "基础版 (1账号)", "billMonth": "2026-06", "contractPeriod": "2026-11-15 至 2027-11-14",
      "contractStatus": "正常", "totalAmount": 2000, "paidAmount": 0, "unpaidAmount": 2000,
      "paymentStatus": "已逾期", "paymentProgress": 0, "invoiceStatus": "不开票", "salesName": "王五",
      "paymentPlanDate": "2026-11-06", "lastPaymentTime": "", "paymentRecords": []},
     {"id": 4, "storeName": "稻状元", "customerName": "科技初创公司B", "orderNo": "GD-20260101-001",
-     "package": "企业旗舰版 (10账号)", "billMonth": "2026-11", "contractPeriod": "2026-11-16 至 2027-11-15",
+     "package": "企业旗舰版 (10账号)", "billMonth": "2026-06", "contractPeriod": "2026-11-16 至 2027-11-15",
      "contractStatus": "正常", "totalAmount": 25000, "paidAmount": 0, "unpaidAmount": 25000,
      "paymentStatus": "未回款", "paymentProgress": 0, "invoiceStatus": "待开票", "salesName": "赵六",
      "paymentPlanDate": "2026-11-07", "lastPaymentTime": "", "paymentRecords": []},
@@ -324,37 +329,3 @@ ADMIN_LEDGER = [
      "remark": "快递费", "createdBy": "行政小王", "createTime": "2026-06-12 10:20"},
 ]
 
-INSTALLERS = ["赵云", "马超", "黄忠"]
-
-
-class MemoryStore:
-    def __init__(self):
-        self.users = deepcopy(USERS)
-        self.work_orders = deepcopy(WORK_ORDERS)
-        self.contracts = deepcopy(CONTRACTS)
-        self.customers = deepcopy(CUSTOMERS)
-        self.public_pool = deepcopy(PUBLIC_POOL)
-        self.follow_ups = deepcopy(FOLLOW_UPS)
-        self.contacts = deepcopy(CONTACTS)
-        self.pool_config = deepcopy(POOL_CONFIG)
-        self.return_logs = deepcopy(RETURN_LOGS)
-        self.schedules = deepcopy(SCHEDULES)
-        self.finance = deepcopy(FINANCE)
-        self.stock_in = deepcopy(STOCK_IN)
-        self.sim_stock_in = deepcopy(SIM_STOCK_IN)
-        self.stock_out = deepcopy(STOCK_OUT)
-        self.account_ledger = deepcopy(ACCOUNT_LEDGER)
-        self.admin_ledger = deepcopy(ADMIN_LEDGER)
-        self.work_order_seq = len(WORK_ORDERS)
-        self.customer_seq = len(CUSTOMERS)
-        self.public_pool_seq = 200
-        self.follow_up_seq = len(FOLLOW_UPS)
-        self.contact_seq = len(CONTACTS)
-        self.return_log_seq = len(RETURN_LOGS)
-        self.finance_seq = len(FINANCE)
-        self.contract_seq = len(CONTRACTS)
-        self.account_ledger_seq = len(ACCOUNT_LEDGER)
-        self.admin_ledger_seq = len(ADMIN_LEDGER)
-
-
-store = MemoryStore()

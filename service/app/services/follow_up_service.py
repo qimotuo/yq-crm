@@ -3,7 +3,7 @@ from datetime import datetime
 
 from sqlalchemy.orm import Session
 
-from app.core.data_scope import is_all_data_scope, resolve_sales_filter
+from app.core.data_scope import resolve_sales_names
 from app.core.exceptions import BizError
 from app.services import customer_service as customer_svc
 from app.db.models import Customer, FollowUp, User
@@ -18,11 +18,12 @@ def _now_str() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M")
 
 
-def _to_dict(item: FollowUp) -> dict:
+def _to_dict(item: FollowUp, store_name: str = "") -> dict:
     return {
         "id": item.id,
         "customerId": item.customer_id,
         "customerName": item.customer_name,
+        "storeName": item.store_name or store_name,
         "salesName": item.sales_name,
         "type": item.type,
         "content": item.content,
@@ -30,6 +31,14 @@ def _to_dict(item: FollowUp) -> dict:
         "status": item.status,
         "createTime": item.create_time,
     }
+
+
+def _store_names_by_customer(db: Session, rows: list[FollowUp]) -> dict[int, str]:
+    ids = {r.customer_id for r in rows if r.customer_id and not r.store_name}
+    if not ids:
+        return {}
+    found = db.query(Customer.id, Customer.store_name).filter(Customer.id.in_(ids)).all()
+    return {cid: name for cid, name in found if name}
 
 
 def list_follow_ups(
@@ -44,21 +53,37 @@ def list_follow_ups(
 ) -> dict:
     perms = perms or {}
     q = db.query(FollowUp)
-    sales = resolve_sales_filter(perms, user, sales_name)
-    if sales:
-        q = q.filter(FollowUp.sales_name.contains(sales))
-    elif not is_all_data_scope(perms):
-        q = q.filter(FollowUp.sales_name == user.name)
+    sales_names = resolve_sales_names(db, perms, user, sales_name)
+    scoped = sales_names is not None
+    if scoped:
+        if not sales_names:
+            return {"list": [], "total": 0}
+    elif sales_name:
+        q = q.filter(FollowUp.sales_name.contains(sales_name))
     if customer_id:
         q = q.filter(FollowUp.customer_id == customer_id)
     if follow_type:
         q = q.filter(FollowUp.type == follow_type)
     if keyword:
-        q = q.filter(FollowUp.content.contains(keyword))
+        q = q.filter(
+            FollowUp.content.contains(keyword)
+            | FollowUp.store_name.contains(keyword)
+            | FollowUp.customer_name.contains(keyword)
+        )
     if status:
         q = q.filter(FollowUp.status == status)
     rows = q.order_by(FollowUp.create_time.desc(), FollowUp.id.desc()).all()
-    return {"list": [_to_dict(r) for r in rows], "total": len(rows)}
+    if scoped:
+        from app.services.customer_owner import OwnerIndex
+
+        index = OwnerIndex.load(db)
+        allowed = set(sales_names or [])
+        rows = [
+            row for row in rows
+            if OwnerIndex.visible(index.by_id.get(row.customer_id) if row.customer_id else None, row.sales_name, allowed)
+        ]
+    stores = _store_names_by_customer(db, rows)
+    return {"list": [_to_dict(r, stores.get(r.customer_id, "")) for r in rows], "total": len(rows)}
 
 
 def _parse_next_plan(text: str) -> tuple[str, str] | None:
@@ -99,11 +124,32 @@ def create_follow_up(db: Session, user: User, data: dict, *, auto_schedule: bool
         raise BizError("状态无效")
 
     now = _now_str()
+    cid = data.get("customerId") or 0
+    customer = db.query(Customer).filter(Customer.id == cid).first() if cid else None
+    store_name = (data.get("storeName") or "").strip()
+    if not store_name and customer:
+        store_name = customer.store_name or ""
+    customer_name = data.get("customerName") or (customer.customer_name if customer else "")
+    actor = user
+    sales = data.get("salesName") or user.name
+    if customer and (customer.owner_status or "confirmed") == "pending":
+        raise BizError("该客户归属待确认，不能跟进")
+    if customer and customer.sales_name:
+        sales = customer.sales_name
+        owner = (
+            db.query(User)
+            .filter(User.enabled.is_(True), User.role_code == "sales", User.name == customer.sales_name)
+            .order_by(User.id)
+            .first()
+        )
+        if owner:
+            actor = owner
     item = FollowUp(
-        user_id=user.id,
-        customer_id=data.get("customerId") or 0,
-        customer_name=data.get("customerName") or "",
-        sales_name=data.get("salesName") or user.name,
+        user_id=actor.id,
+        customer_id=cid,
+        customer_name=customer_name,
+        store_name=store_name,
+        sales_name=sales,
         type=follow_type,
         content=content,
         next_plan=data.get("nextPlan") or "",
@@ -126,10 +172,10 @@ def create_follow_up(db: Session, user: User, data: dict, *, auto_schedule: bool
             date, time = parsed
             schedule_svc.create_schedule(
                 db,
-                user,
+                actor,
                 {
-                    "title": f"跟进·{data.get('customerName') or '客户'}",
-                    "customerName": data.get("customerName") or "",
+                    "title": f"跟进·{customer_name or '客户'}",
+                    "customerName": customer_name,
                     "date": date,
                     "time": time,
                     "type": _schedule_type_from_follow(follow_type),
@@ -140,6 +186,7 @@ def create_follow_up(db: Session, user: User, data: dict, *, auto_schedule: bool
 
 def create_follow_up_from_schedule(db: Session, user: User, schedule) -> dict:
     customer_id = 0
+    store_name = ""
     if schedule.customer_name:
         row = (
             db.query(Customer)
@@ -149,12 +196,14 @@ def create_follow_up_from_schedule(db: Session, user: User, schedule) -> dict:
         )
         if row:
             customer_id = row.id
+            store_name = row.store_name or ""
     return create_follow_up(
         db,
         user,
         {
             "customerId": customer_id,
             "customerName": schedule.customer_name,
+            "storeName": store_name,
             "type": schedule.type if schedule.type in _FOLLOW_TYPES else "电话",
             "content": f"完成日程「{schedule.title}」",
             "status": "已完成",

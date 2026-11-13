@@ -13,6 +13,10 @@ ACTION_LABELS = {
     "install": "安装登记",
     "claim": "领取",
     "payment": "录入回款",
+    "call": "外呼",
+    "upload": "上传",
+    "import": "导入",
+    "return": "退回",
 }
 
 
@@ -28,6 +32,8 @@ def record(
     ip: str | None = None,
     method: str | None = None,
     path: str | None = None,
+    target_id: str = "",
+    changes: list | None = None,
 ) -> OperationLog:
     row = OperationLog(
         user_id=user_id,
@@ -39,6 +45,8 @@ def record(
         ip=ip,
         method=method,
         path=path,
+        target_id=str(target_id or ""),
+        changes=list(changes or []),
     )
     db.add(row)
     db.commit()
@@ -77,6 +85,18 @@ def list_logs(
     }
 
 
+def list_changes(db: Session, *, module: str, target_id: str) -> dict:
+    rows = (
+        db.query(OperationLog)
+        .filter(OperationLog.module == module, OperationLog.target_id == str(target_id))
+        .order_by(OperationLog.created_at.desc())
+        .limit(100)
+        .all()
+    )
+    items = [item for item in (_to_dict(r) for r in rows) if item["changes"]]
+    return {"list": items, "total": len(items)}
+
+
 def _to_dict(r: OperationLog) -> dict:
     return {
         "id": r.id,
@@ -90,5 +110,7 @@ def _to_dict(r: OperationLog) -> dict:
         "ip": r.ip,
         "method": r.method,
         "path": r.path,
+        "targetId": r.target_id or "",
+        "changes": list(r.changes or []),
         "createdAt": r.created_at.strftime("%Y-%m-%d %H:%M:%S") if r.created_at else "",
     }

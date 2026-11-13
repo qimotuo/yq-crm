@@ -52,6 +52,12 @@ NOTIFY_TEMPLATES: dict[str, dict[str, Any]] = {
         "content": "{customer_name} 账单已逾期，未收 ¥{amount}",
         "path": "/finance",
     },
+    "finance_payment_due": {
+        "type": "财务",
+        "title": "付费提醒",
+        "content": "{customer_name} 计划回款日 {plan_date}，未收 ¥{amount}",
+        "path": "/finance",
+    },
     "stock_low": {
         "type": "库存",
         "title": "库存预警",
@@ -61,7 +67,7 @@ NOTIFY_TEMPLATES: dict[str, dict[str, Any]] = {
     "contract_expire": {
         "type": "合同",
         "title": "合同即将到期",
-        "content": "{customer_name} 合同将于 {days} 天内到期",
+        "content": "{customer_name} 合同将于 {days} 天内到期（{end_date}）",
         "path": "/contracts",
     },
     "system_notice": {
@@ -69,6 +75,12 @@ NOTIFY_TEMPLATES: dict[str, dict[str, Any]] = {
         "title": "{title}",
         "content": "{content}",
         "path": "{path}",
+    },
+    "pool_auto_return": {
+        "type": "客户",
+        "title": "客户已自动退回公海",
+        "content": "{store_name}（{customer_name}）已超过 {days} 天未跟进，已退回公海池",
+        "path": "/my-customers",
     },
 }
 

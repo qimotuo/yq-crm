@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 class FollowUpCreateRequest(BaseModel):
     customerId: int = 0
     customerName: str = ""
+    storeName: str = ""
     type: str = "电话"
     content: str = Field(..., min_length=1, max_length=512)
     nextPlan: str = ""
@@ -30,9 +31,12 @@ class CustomerCreateRequest(BaseModel):
     operator: str = ""
     simSupplier: str = ""
     contractPeriod: str = ""
+    price: str = ""
     invoiceType: str = ""
     wechatId: str = ""
     source: str = ""
+    idCardFront: str = ""
+    idCardBack: str = ""
 
 
 class CustomerUpdateRequest(BaseModel):
@@ -55,8 +59,17 @@ class CustomerUpdateRequest(BaseModel):
     operator: str | None = None
     simSupplier: str | None = None
     contractPeriod: str | None = None
+    price: str | None = None
     invoiceType: str | None = None
     wechatId: str | None = None
+    idCardFront: str | None = None
+    idCardBack: str | None = None
+
+
+class CustomerTransferRequest(BaseModel):
+    id: int
+    salesName: str = Field(..., min_length=1, max_length=64)
+    reason: str = ""
 
 
 class CustomerIdRequest(BaseModel):

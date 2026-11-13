@@ -2,8 +2,7 @@
 
 from sqlalchemy.orm import Session
 
-from app.data.store import store
-from app.db.models import Customer, WorkOrder
+from app.db.models import Contract, Customer, Finance, StockIn, StockOut, WorkOrder
 from app.db.serialize import work_order_to_dict
 
 
@@ -34,9 +33,9 @@ def _find_order_by_mac(db: Session, value: str) -> WorkOrder | None:
     )
     if order:
         return order
-    for row in store.stock_out:
-        if _match(value, row.get("mac", "")):
-            return _find_order_by_no(db, row.get("orderNo", ""))
+    out = db.query(StockOut).filter(StockOut.mac.ilike(f"%{value}%")).order_by(StockOut.id.desc()).first()
+    if out:
+        return _find_order_by_no(db, out.order_no)
     return None
 
 
@@ -51,11 +50,33 @@ def _find_order_by_iccid(db: Session, value: str) -> WorkOrder | None:
     )
     if order:
         return order
-    for row in store.stock_out:
-        iccid = row.get("iccid", "")
-        iccid2 = row.get("iccid2", "")
-        if _match(value, iccid) or _match(value, iccid2):
-            return _find_order_by_no(db, row.get("orderNo", ""))
+    like = f"%{value}%"
+    out = (
+        db.query(StockOut)
+        .filter(
+            (StockOut.iccid.ilike(like))
+            | (StockOut.iccid2.ilike(like))
+            | (StockOut.mobile_no.ilike(like))
+            | (StockOut.telecom_no.ilike(like))
+            | (StockOut.replaced_card_no.ilike(like))
+        )
+        .order_by(StockOut.id.desc())
+        .first()
+    )
+    if out:
+        return _find_order_by_no(db, out.order_no)
+    inbound = (
+        db.query(StockIn)
+        .filter(
+            (StockIn.mobile_no.ilike(like))
+            | (StockIn.telecom_no.ilike(like))
+            | (StockIn.replaced_card_no.ilike(like))
+        )
+        .order_by(StockIn.id.desc())
+        .first()
+    )
+    if inbound and inbound.order_no:
+        return _find_order_by_no(db, inbound.order_no)
     return None
 
 
@@ -70,29 +91,49 @@ def _find_customer(db: Session, value: str) -> Customer | None:
     )
 
 
-def _finance_by_order(order_no: str) -> dict | None:
-    for item in store.finance:
-        if item.get("orderNo") == order_no:
-            return item
-    return None
+def _finance_by_order(db: Session, order_no: str) -> dict | None:
+    row = db.query(Finance).filter(Finance.order_no == order_no).first()
+    if not row:
+        return None
+    return {
+        "totalAmount": row.total_amount,
+        "paidAmount": row.paid_amount,
+        "paymentStatus": row.payment_status,
+    }
 
 
-def _contract_by_order(order_no: str) -> dict | None:
-    for item in store.contracts:
-        if item.get("orderNo") == order_no:
-            return item
-    return None
+def _finance_by_id(db: Session, finance_id: int) -> dict | None:
+    row = db.query(Finance).filter(Finance.id == finance_id).first()
+    if not row:
+        return None
+    return {
+        "totalAmount": row.total_amount,
+        "paidAmount": row.paid_amount,
+        "paymentStatus": row.payment_status,
+    }
 
 
-def _contract_by_no(value: str) -> dict | None:
-    for item in store.contracts:
-        if _match(value, item.get("contractNo", "")):
-            return item
-    return None
+def _contract_by_order(db: Session, order_no: str) -> dict | None:
+    row = db.query(Contract).filter(Contract.order_no == order_no).first()
+    if not row:
+        return None
+    return {"contractNo": row.contract_no, "status": row.status, "amount": row.amount, "orderNo": row.order_no}
 
 
-def _stock_outs_by_order(order_no: str) -> list[dict]:
-    return [r for r in store.stock_out if r.get("orderNo") == order_no]
+def _contract_by_no(db: Session, value: str) -> dict | None:
+    row = db.query(Contract).filter(Contract.contract_no.ilike(f"%{value}%")).first()
+    if not row:
+        return None
+    return {"contractNo": row.contract_no, "status": row.status, "amount": row.amount, "orderNo": row.order_no}
+
+
+def _stock_outs_by_order(db: Session, order_no: str) -> list[dict]:
+    rows = db.query(StockOut).filter(StockOut.order_no == order_no).all()
+    return [{
+        "model": r.model, "outNo": r.out_no, "mac": r.mac,
+        "storeName": r.store_name, "mobileNo": r.mobile_no,
+        "telecomNo": r.telecom_no, "replacedCardNo": r.replaced_card_no,
+    } for r in rows]
 
 
 def _resolve_context(db: Session, trace_type: str, value: str) -> tuple[WorkOrder | None, Customer | None, str]:
@@ -111,7 +152,7 @@ def _resolve_context(db: Session, trace_type: str, value: str) -> tuple[WorkOrde
         order = _find_order_by_iccid(db, value)
         key = value
     elif trace_type == "contractNo":
-        contract = _contract_by_no(value)
+        contract = _contract_by_no(db, value)
         if contract:
             key = contract.get("contractNo", value)
             order = _find_order_by_no(db, contract.get("orderNo", ""))
@@ -132,7 +173,7 @@ def _resolve_context(db: Session, trace_type: str, value: str) -> tuple[WorkOrde
     return order, customer, key
 
 
-def _build_steps(order: WorkOrder | None, customer: Customer | None) -> list[str]:
+def _build_steps(db: Session, order: WorkOrder | None, customer: Customer | None) -> list[str]:
     if not order and not customer:
         return []
 
@@ -154,12 +195,22 @@ def _build_steps(order: WorkOrder | None, customer: Customer | None) -> list[str
         elif od["status"] == "待派工":
             steps.append("派工: 待分配安装员")
 
-    outs = _stock_outs_by_order(order_no) if order_no else []
+    outs = _stock_outs_by_order(db, order_no) if order_no else []
     if outs:
         for out in outs:
-            steps.append(
-                f"出库: {out.get('model', '-')} / {out.get('outNo', '-')} / MAC {out.get('mac', '-')}"
+            cards = " / ".join(
+                part for part in (
+                    f"移动 {out['mobileNo']}" if out.get("mobileNo") else "",
+                    f"电信 {out['telecomNo']}" if out.get("telecomNo") else "",
+                    f"旧卡 {out['replacedCardNo']}" if out.get("replacedCardNo") else "",
+                ) if part
             )
+            line = f"出库: {out.get('model', '-')} / {out.get('outNo', '-')} / MAC {out.get('mac', '-')}"
+            if out.get("storeName"):
+                line += f" / {out['storeName']}"
+            if cards:
+                line += f" / {cards}"
+            steps.append(line)
     elif order and (order.mac or order.device_model):
         steps.append(
             f"设备: {order.device_supplier or '-'} {order.device_model or '-'} / MAC {order.mac or '-'}"
@@ -170,20 +221,15 @@ def _build_steps(order: WorkOrder | None, customer: Customer | None) -> list[str
     elif order and order.install_date:
         steps.append(f"安装登记: {order.install_date}")
 
-    fin = _finance_by_order(order_no) if order_no else None
+    fin = _finance_by_order(db, order_no) if order_no else None
+    if not fin and customer and customer.finance_id:
+        fin = _finance_by_id(db, customer.finance_id)
     if fin:
         steps.append(
             f"财务: 应收 ¥{fin.get('totalAmount', 0)} / 已收 ¥{fin.get('paidAmount', 0)} / {fin.get('paymentStatus', '-')}"
         )
-    elif customer and customer.finance_id:
-        for item in store.finance:
-            if item.get("id") == customer.finance_id:
-                steps.append(
-                    f"财务: 应收 ¥{item.get('totalAmount', 0)} / 已收 ¥{item.get('paidAmount', 0)} / {item.get('paymentStatus', '-')}"
-                )
-                break
 
-    contract = _contract_by_order(order_no) if order_no else None
+    contract = _contract_by_order(db, order_no) if order_no else None
     if contract:
         steps.append(
             f"合同: {contract.get('contractNo', '-')} / {contract.get('status', '-')} / ¥{contract.get('amount', 0)}"
@@ -198,7 +244,7 @@ def trace_query(db: Session, trace_type: str, value: str) -> dict | None:
         return None
 
     order, customer, key = _resolve_context(db, trace_type, value)
-    steps = _build_steps(order, customer)
+    steps = _build_steps(db, order, customer)
 
     if not steps:
         return {

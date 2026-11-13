@@ -13,6 +13,11 @@ class StockInCreateRequest(BaseModel):
     qty: int = Field(1, ge=1)
     receiver: str = ""
     remark: str = ""
+    storeName: str = Field("", max_length=128)
+    orderNo: str = Field("", max_length=32)
+    mobileNo: str = Field("", max_length=32)
+    telecomNo: str = Field("", max_length=32)
+    replacedCardNo: str = Field("", max_length=32)
 
 
 class StockInUpdateRequest(BaseModel):
@@ -25,6 +30,11 @@ class StockInUpdateRequest(BaseModel):
     qty: int | None = Field(None, ge=1)
     receiver: str | None = None
     remark: str | None = None
+    storeName: str | None = Field(None, max_length=128)
+    orderNo: str | None = Field(None, max_length=32)
+    mobileNo: str | None = Field(None, max_length=32)
+    telecomNo: str | None = Field(None, max_length=32)
+    replacedCardNo: str | None = Field(None, max_length=32)
 
 
 class SimStockInCreateRequest(BaseModel):
@@ -73,9 +83,12 @@ class StockOutCreateRequest(BaseModel):
     operator: str = ""
     receiver: str = ""
     remark: str = ""
-    storeName: str = ""
+    storeName: str = Field("", max_length=128)
     customerName: str = ""
     address: str = ""
+    mobileNo: str = Field("", max_length=32)
+    telecomNo: str = Field("", max_length=32)
+    replacedCardNo: str = Field("", max_length=32)
 
     @field_validator("operator")
     @classmethod
@@ -104,6 +117,10 @@ class StockOutImportRow(BaseModel):
     operator: str = ""
     receiver: str = ""
     remark: str = ""
+    storeName: str = ""
+    mobileNo: str = ""
+    telecomNo: str = ""
+    replacedCardNo: str = ""
 
     @field_validator("operator")
     @classmethod
@@ -122,6 +139,11 @@ class StockInImportRow(BaseModel):
     qty: int = Field(1, ge=1)
     receiver: str = ""
     remark: str = ""
+    storeName: str = ""
+    orderNo: str = ""
+    mobileNo: str = ""
+    telecomNo: str = ""
+    replacedCardNo: str = ""
 
 
 class SimStockInImportRow(BaseModel):

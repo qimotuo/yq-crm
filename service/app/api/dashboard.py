@@ -15,6 +15,6 @@ router = APIRouter(prefix="/dashboard", tags=["工作台"])
 def get_stats(
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    __: dict = Depends(require_menu("/dashboard")),
+    perms: dict = Depends(require_menu("/dashboard")),
 ):
-    return ok(dashboard_stats(db))
+    return ok(dashboard_stats(db, user=user, perms=perms))

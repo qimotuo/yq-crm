@@ -77,6 +77,19 @@ def send_from_template(
     db.add(item)
     db.commit()
     db.refresh(item)
+
+    # 扩展通道（阿里云短信等）：站内信成功后再推
+    user = db.query(User).filter(User.id == user_id).first()
+    if user:
+        from app.services.notify_channels import dispatch_extra_channels
+
+        dispatch_extra_channels(
+            user=user,
+            template_code=template_code,
+            title=rendered["title"],
+            content=rendered["content"],
+            context=context,
+        )
     return item
 
 

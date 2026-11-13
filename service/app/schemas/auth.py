@@ -31,14 +31,28 @@ class RoleCreateRequest(BaseModel):
 class UserCreateRequest(BaseModel):
     username: str
     name: str
+    nickname: str | None = None
     role: str
+    phone: str | None = None
+    email: str | None = None
+    gender: str | None = None
+    description: str | None = None
+    avatar: str | None = None
+    deptCode: str | None = None
 
 
 class UserUpdateRequest(BaseModel):
     id: int
     username: str | None = None
     name: str | None = None
+    nickname: str | None = None
     role: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    gender: str | None = None
+    description: str | None = None
+    avatar: str | None = None
+    deptCode: str | None = None
 
 
 class UserToggleRequest(BaseModel):
@@ -52,3 +66,34 @@ class UserIdRequest(BaseModel):
 
 class DeleteUserRequest(BaseModel):
     id: int
+
+
+class ProfileUpdateRequest(BaseModel):
+    name: str | None = None
+    nickname: str | None = None
+    phone: str | None = None
+    email: str | None = None
+    gender: str | None = None
+    description: str | None = None
+    avatar: str | None = None
+
+
+class ChangePasswordRequest(BaseModel):
+    oldPassword: str
+    newPassword: str = Field(..., min_length=6)
+
+
+class UserImportRow(BaseModel):
+    username: str = Field(..., min_length=1)
+    name: str = Field(..., min_length=1)
+    nickname: str = ""
+    role: str = Field(..., min_length=1)
+    deptCode: str = ""
+    phone: str = ""
+    email: str = ""
+    gender: str = ""
+    description: str = ""
+
+
+class UserImportRequest(BaseModel):
+    rows: list[UserImportRow] = Field(default_factory=list)

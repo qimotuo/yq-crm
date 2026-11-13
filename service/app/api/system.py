@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 
 from app.core.audit import log_action
 from app.core.deps import get_current_user, require_operations
+from app.core.pagination import ensure_page_size
 from app.core.response import ok
 from app.db.models import User
 from app.db.session import get_db
@@ -11,12 +12,22 @@ from app.schemas.auth import (
     RoleUpdateRequest,
     UserCreateRequest,
     UserIdRequest,
+    UserImportRequest,
     UserToggleRequest,
     UserUpdateRequest,
 )
 from app.services import audit_service, rbac_service as svc
 
 router = APIRouter(prefix="/system", tags=["系统管理"])
+
+
+@router.get("/departments")
+def list_departments(
+    _: User = Depends(get_current_user),
+):
+    from app.core.data_scope import DEPARTMENTS
+
+    return ok({"list": DEPARTMENTS})
 
 
 @router.get("/roles")
@@ -109,6 +120,20 @@ def create_user(
     return ok(result)
 
 
+@router.post("/users/import")
+def import_users(
+    body: UserImportRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("system:user:import", "system:user:create")),
+):
+    rows = [r.model_dump() for r in body.rows]
+    result = svc.import_users(db, rows)
+    log_action(db, user, "create", "系统", f"批量导入用户 {result['count']} 条", request=request)
+    return ok(result)
+
+
 @router.put("/users")
 def update_user(
     body: UserUpdateRequest,
@@ -141,7 +166,7 @@ def reset_password(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    __: dict = Depends(require_operations("system:user:edit")),
+    __: dict = Depends(require_operations("system:user:reset", "system:user:edit")),
 ):
     result = svc.reset_user_password(db, body.id)
     log_action(db, user, "update", "系统", f"重置密码 userId={body.id}", request=request)
@@ -154,7 +179,7 @@ def toggle_user(
     request: Request,
     db: Session = Depends(get_db),
     user: User = Depends(get_current_user),
-    __: dict = Depends(require_operations("system:user:edit")),
+    __: dict = Depends(require_operations("system:user:enable", "system:user:edit")),
 ):
     result = svc.toggle_user_enabled(db, body.id, body.enabled)
     log_action(
@@ -177,5 +202,6 @@ def list_operation_logs(
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("system:log:view")),
 ):
+    size = ensure_page_size(size)
     log_action(db, user, "query", "系统", "查询操作日志", request=request)
     return ok(audit_service.list_logs(db, keyword=keyword, action=action, module=module, page=page, size=size))

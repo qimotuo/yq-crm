@@ -22,7 +22,7 @@ def get_account_ledger(
     __: dict = Depends(require_operations("account-ledger:view")),
 ):
     log_action(db, user, "query", "账户账本", "查询账户账本", request=request)
-    return ok(svc.list_account_ledger(section, month, direction))
+    return ok(svc.list_account_ledger(db, section, month, direction))
 
 
 @router.post("/account-ledger")
@@ -33,7 +33,7 @@ def create_account_ledger(
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("account-ledger:create")),
 ):
-    item = svc.create_account_ledger(body, user.name)
+    item = svc.create_account_ledger(db, body, user.name)
     log_action(db, user, "create", "账户账本", f"记账 {item['category']} {item['amount']}", request=request)
     return ok(item)
 
@@ -46,7 +46,7 @@ def delete_account_ledger(
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("account-ledger:delete")),
 ):
-    svc.delete_account_ledger(id)
+    svc.delete_account_ledger(db, id)
     log_action(db, user, "delete", "账户账本", f"删除记录 id={id}", request=request)
     return ok({"ok": True})
 
@@ -61,7 +61,7 @@ def get_admin_ledger(
     __: dict = Depends(require_operations("admin-ledger:view")),
 ):
     log_action(db, user, "query", "行政账本", "查询行政账本", request=request)
-    return ok(svc.list_admin_ledger(month, category))
+    return ok(svc.list_admin_ledger(db, month, category))
 
 
 @router.post("/admin-ledger")
@@ -72,9 +72,22 @@ def create_admin_ledger(
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("admin-ledger:create")),
 ):
-    item = svc.create_admin_ledger(body, user.name)
+    item = svc.create_admin_ledger(db, body, user.name)
     log_action(db, user, "create", "行政账本", f"记账 {item['category']} {item['amount']}", request=request)
     return ok(item)
+
+
+@router.post("/admin-ledger/import")
+def import_admin_ledger(
+    body: dict,
+    request: Request,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+    __: dict = Depends(require_operations("admin-ledger:import")),
+):
+    result = svc.import_admin_ledger(db, body.get("rows") or [], user.name)
+    log_action(db, user, "import", "行政账本", f"导入 {result['count']} 条", request=request)
+    return ok(result)
 
 
 @router.delete("/admin-ledger")
@@ -85,6 +98,6 @@ def delete_admin_ledger(
     user: User = Depends(get_current_user),
     __: dict = Depends(require_operations("admin-ledger:delete")),
 ):
-    svc.delete_admin_ledger(id)
+    svc.delete_admin_ledger(db, id)
     log_action(db, user, "delete", "行政账本", f"删除记录 id={id}", request=request)
     return ok({"ok": True})

@@ -15,6 +15,8 @@ def log_action(
     detail: str = "",
     *,
     request: Request | None = None,
+    target_id: str = "",
+    changes: list | None = None,
 ) -> None:
     ip = None
     method = None
@@ -34,4 +36,33 @@ def log_action(
         ip=ip,
         method=method,
         path=path,
+        target_id=target_id,
+        changes=changes,
+    )
+
+
+def log_change(
+    db: Session,
+    user: User | None,
+    module: str,
+    target_id: str | int,
+    title: str,
+    changes: list,
+    *,
+    request: Request | None = None,
+) -> None:
+    if not changes:
+        return
+    summary = "；".join(
+        f"{item['label']}：{item['before'] or '空'} → {item['after'] or '空'}" for item in changes
+    )
+    log_action(
+        db,
+        user,
+        "update",
+        module,
+        f"{title} {summary}",
+        request=request,
+        target_id=str(target_id),
+        changes=changes,
     )

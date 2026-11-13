@@ -1,12 +1,14 @@
+import re
 from datetime import datetime
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import BizError
-from app.data.store import INSTALLERS
-from app.db.models import WorkOrder
+from app.db.models import Customer, StockOut, User, WorkOrder
 from app.db.serialize import apply_work_order_patch, work_order_to_dict
 from app.services import customer_service as customer_svc
+from app.services.install_followup import open_bill_and_contract
 
 
 def _now_str() -> str:
@@ -34,6 +36,113 @@ def _all_orders(db: Session) -> list[WorkOrder]:
     return db.query(WorkOrder).order_by(WorkOrder.id.desc()).all()
 
 
+def _attach_card_nos(db: Session, items: list[dict]) -> None:
+    """电信/移动/旧卡号记在出库单上，没有出库单时按运营商从工单卡号拆。"""
+    outs: dict[str, StockOut] = {}
+    for row in db.query(StockOut).order_by(StockOut.id).all():
+        if row.order_no:
+            outs[row.order_no] = row
+    for item in items:
+        out = outs.get(item.get("orderNo") or "")
+        telecom = (out.telecom_no if out else "") or ""
+        mobile = (out.mobile_no if out else "") or ""
+        iccid, backup = item.get("iccid") or "", item.get("backupIccid") or ""
+        if not telecom and not mobile:
+            operator = item.get("operator") or ""
+            if "移动" in operator and "电信" not in operator:
+                mobile, telecom = iccid, backup
+            else:
+                telecom, mobile = iccid, backup
+        elif not mobile:
+            mobile = backup
+        elif not telecom:
+            telecom = backup
+        item["telecomNo"] = telecom
+        item["mobileNo"] = mobile
+        item["oldCardNo"] = (out.replaced_card_no if out else "") or ""
+
+
+def _q(filters: dict, key: str) -> str:
+    return str(filters.get(key) or "").strip()
+
+
+def _contains(value, keyword: str) -> bool:
+    if not keyword:
+        return True
+    return keyword.lower() in str(value or "").lower()
+
+
+def _norm_code(value) -> str:
+    return str(value or "").replace(":", "").replace("-", "").replace(" ", "").upper()
+
+
+def _mac_contains(value, keyword: str) -> bool:
+    if not keyword:
+        return True
+    return _norm_code(keyword) in _norm_code(value)
+
+
+def _norm_date(value) -> str:
+    match = re.search(r"(\d{4})\D(\d{1,2})\D(\d{1,2})", str(value or ""))
+    if not match:
+        return ""
+    year, month, day = match.groups()
+    return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+
+
+def _in_date_range(value, start: str, end: str) -> bool:
+    if not start and not end:
+        return True
+    current = _norm_date(value)
+    if not current:
+        return False
+    if start and current < _norm_date(start):
+        return False
+    if end and current > _norm_date(end):
+        return False
+    return True
+
+
+_KEYWORD_FIELDS = (
+    "orderNo", "customerName", "storeName", "contact", "contactPhone", "address",
+    "salesName", "installer", "deviceSupplier", "deviceModel", "mac", "imei",
+    "simSupplier", "operator", "iccid", "backupIccid", "telecomNo", "mobileNo",
+    "oldCardNo", "cardPackage", "remark", "installRemark",
+)
+
+
+def _match_work_order(order: dict, filters: dict) -> bool:
+    status = _q(filters, "status")
+    if status and order.get("status") != status:
+        return False
+
+    keyword = _q(filters, "keyword")
+    if keyword:
+        blob = " ".join(str(order.get(key) or "") for key in _KEYWORD_FIELDS)
+        norm_kw = _norm_code(keyword)
+        mac_hit = bool(norm_kw) and norm_kw in _norm_code(order.get("mac"))
+        if keyword.lower() not in blob.lower() and not mac_hit:
+            return False
+
+    if not _contains(order.get("installer"), _q(filters, "installer")):
+        return False
+    if not _contains(order.get("deviceModel"), _q(filters, "deviceModel")):
+        return False
+    if not _mac_contains(order.get("mac"), _q(filters, "mac")):
+        return False
+
+    iccid = _q(filters, "iccid")
+    if iccid and not any(
+        iccid in str(order.get(key) or "")
+        for key in ("iccid", "backupIccid", "telecomNo", "mobileNo", "oldCardNo")
+    ):
+        return False
+
+    if not _in_date_range(order.get("installDate"), _q(filters, "installDateFrom"), _q(filters, "installDateTo")):
+        return False
+    return True
+
+
 def list_work_orders(
     db: Session,
     keyword: str = "",
@@ -42,31 +151,33 @@ def list_work_orders(
     iccid: str = "",
     contract_no: str = "",
     device_model: str = "",
+    filters: dict | None = None,
 ) -> dict:
-    from app.data.store import store
+    merged = {
+        "keyword": keyword,
+        "status": status,
+        "mac": mac,
+        "iccid": iccid,
+        "contractNo": contract_no,
+        "deviceModel": device_model,
+    }
+    for key, value in (filters or {}).items():
+        if value not in (None, ""):
+            merged[key] = value
 
     items = _all_orders(db)
     result = [work_order_to_dict(o) for o in items]
-    if status:
-        result = [o for o in result if o["status"] == status]
-    if keyword:
-        kw = keyword.lower()
-        result = [
-            o for o in result
-            if kw in o["orderNo"].lower()
-            or keyword in o["customerName"]
-            or keyword in o.get("storeName", "")
-            or keyword in o.get("contact", "")
-            or keyword in o.get("contactPhone", "")
-        ]
-    if mac:
-        result = [o for o in result if mac in o.get("mac", "")]
-    if iccid:
-        result = [o for o in result if iccid in o.get("iccid", "")]
-    if device_model:
-        result = [o for o in result if device_model in o.get("deviceModel", "")]
-    if contract_no:
-        order_nos = [c["orderNo"] for c in store.contracts if contract_no in c["contractNo"]]
+    _attach_card_nos(db, result)
+    result = [o for o in result if _match_work_order(o, merged)]
+
+    contract = _q(merged, "contractNo")
+    if contract:
+        from app.db.models import Contract
+
+        order_nos = {
+            c.order_no
+            for c in db.query(Contract).filter(Contract.contract_no.contains(contract)).all()
+        }
         result = [o for o in result if o["orderNo"] in order_nos]
     return {"list": result, "total": len(result)}
 
@@ -114,6 +225,10 @@ def create_work_order(db: Session, body: dict, sales_name: str = "张三") -> di
     next_id = (db.query(WorkOrder.id).order_by(WorkOrder.id.desc()).limit(1).scalar() or 0) + 1
     order_no = f"GD-{day}-{next_id:03d}"
     customer_id = customer_svc.resolve_customer_id(db, body, sales_name)
+    if customer_id:
+        owner = db.query(Customer).filter(Customer.id == customer_id).first()
+        if owner and (owner.owner_status or "confirmed") == "confirmed" and owner.sales_name:
+            sales_name = owner.sales_name
 
     order = WorkOrder(
         order_no=order_no,
@@ -229,23 +344,38 @@ def install_register(db: Session, oid: int, body: dict, operator: str = "") -> d
         "installDate", "storeName", "customerName", "address", "contact", "contactPhone",
         "remark", "deviceSupplier", "deviceModel", "mac", "imei",
         "simSupplier", "operator", "iccid", "backupIccid", "installRemark", "failReason",
+        "installPhotos",
     }
     patch = {k: v for k, v in body.items() if k in allowed}
     if patch.get("storeName") and not patch.get("customerName"):
         patch["customerName"] = patch["storeName"]
+    if "installPhotos" in patch:
+        photos = patch["installPhotos"] or []
+        if not isinstance(photos, list):
+            raise BizError("现场照片格式不正确")
+        if len(photos) > 3:
+            raise BizError("现场照片最多 3 张")
+        patch["installPhotos"] = [str(p).strip() for p in photos if str(p).strip()]
     apply_work_order_patch(order, patch)
     order.status = "已安装"
     op = operator or order.installer or "安装人员"
     detail = f"{order.device_supplier}{order.device_model} / MAC {order.mac or '-'}"
     _append_log(order, "安装登记", op, detail)
     customer_svc.sync_customer_from_order(db, order)
+    open_bill_and_contract(db, order)
     db.commit()
     db.refresh(order)
     return work_order_to_dict(order)
 
 
-def list_installers() -> list[str]:
-    return INSTALLERS
+def list_installers(db: Session) -> list[str]:
+    rows = (
+        db.query(User.name)
+        .filter(User.role_code == "installer", User.enabled.is_(True))
+        .order_by(User.id)
+        .all()
+    )
+    return [r[0] for r in rows if r[0]]
 
 
 def get_installation(db: Session, oid: int) -> dict:
@@ -299,12 +429,14 @@ def create_installation(db: Session, body: dict, operator: str) -> dict:
         backup_iccid=body.get("backupIccid", ""),
         install_remark=body.get("installRemark", ""),
         fail_reason=body.get("failReason", ""),
+        install_photos=list(body.get("installPhotos") or []),
         flow_logs=[],
     )
     db.add(order)
     db.flush()
     _append_log(order, "新增安装登记", operator, f"门店 {store_name or '-'}")
     customer_svc.sync_customer_from_order(db, order)
+    open_bill_and_contract(db, order)
     db.commit()
     db.refresh(order)
     return work_order_to_dict(order)
@@ -329,21 +461,76 @@ def update_installation(db: Session, oid: int, body: dict, operator: str, is_adm
     if order.status == "已安装" or patch.get("status") == "已安装":
         order.status = "已安装"
         customer_svc.sync_customer_from_order(db, order)
+        open_bill_and_contract(db, order)
     _append_log(order, "修改安装登记", operator, f"状态 → {order.status}")
     db.commit()
     db.refresh(order)
     return work_order_to_dict(order)
 
 
-def list_my_orders(db: Session, installer_name: str = "") -> dict:
-    q = db.query(WorkOrder).filter(
-        WorkOrder.order_no.like("GD-%"),
-        WorkOrder.status.in_(("已派工", "安装中", "安装成功", "已安装", "失败", "推迟安装")),
-    )
+def _my_order_base_query(db: Session, installer_name: str = ""):
+    """派工流程仍限 GD- 工单；已安装的历史工单（含关联导入）也算已完成安装。"""
+    q = db.query(WorkOrder).filter(or_(
+        WorkOrder.status == "已安装",
+        (WorkOrder.order_no.like("GD-%")) & WorkOrder.status.in_(
+            ("已派工", "安装中", "安装成功", "失败", "推迟安装")
+        ),
+    ))
     if installer_name:
         q = q.filter(WorkOrder.installer == installer_name)
-    rows = q.order_by(WorkOrder.id.desc()).all()
-    return {"list": [work_order_to_dict(o) for o in rows], "total": len(rows)}
+    return q
+
+
+def _filter_my_orders(rows: list[WorkOrder], keyword: str = "", status: str = "", install_date: str = "") -> list[WorkOrder]:
+    result = rows
+    if status:
+        result = [o for o in result if o.status == status]
+    if keyword:
+        kw = keyword.lower().replace(":", "")
+        result = [
+            o for o in result
+            if kw in o.order_no.lower()
+            or keyword in (o.customer_name or "")
+            or keyword in (o.store_name or "")
+            or keyword in (o.address or "")
+            or keyword in (o.contact or "")
+            or keyword in (o.contact_phone or "")
+            or kw in (o.mac or "").lower().replace(":", "")
+            or keyword in (o.imei or "")
+            or keyword in (o.iccid or "")
+            or keyword in (o.backup_iccid or "")
+            or keyword in (o.installer or "")
+            or keyword in (o.device_model or "")
+            or keyword in (o.device_supplier or "")
+            or keyword in (o.sim_supplier or "")
+        ]
+    if install_date:
+        result = [o for o in result if install_date in (o.install_date or "")]
+    return sorted(result, key=lambda o: o.id, reverse=True)
+
+
+def list_my_orders(
+    db: Session,
+    installer_name: str = "",
+    keyword: str = "",
+    status: str = "",
+    install_date: str = "",
+) -> dict:
+    base_rows = _my_order_base_query(db, installer_name).all()
+    status_counts = {
+        "all": len(base_rows),
+        "assigned": sum(1 for o in base_rows if o.status == "已派工"),
+        "installing": sum(1 for o in base_rows if o.status == "安装中"),
+        "done": sum(1 for o in base_rows if o.status == "已安装"),
+    }
+    rows = _filter_my_orders(base_rows, keyword, status, install_date)
+    items = [work_order_to_dict(o) for o in rows]
+    _attach_card_nos(db, items)
+    return {
+        "list": items,
+        "total": len(items),
+        "statusCounts": status_counts,
+    }
 
 
 def list_sales_orders(db: Session, sales_name: str = "") -> dict:

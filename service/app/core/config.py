@@ -18,8 +18,34 @@ class Settings(BaseSettings):
     wechat_mock: bool = True
 
     openai_api_key: str = ""
-    openai_base_url: str = "https://api.openai.com/v1"
-    agent_model: str = "gpt-4o-mini"
+    dashscope_api_key: str = ""
+    openai_base_url: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    agent_model: str = "qwen-plus"
+    agent_enable_thinking: bool = True
+
+    # 本地附件目录（相对路径相对 service 工作目录；Docker 建议挂载绝对路径）
+    upload_dir: str = "uploads"
+    upload_max_mb: int = 10
+
+    # 业务提醒阈值
+    finance_due_days: int = 3          # 计划回款日前 N 天开始付费提醒
+    contract_expire_days: int = 30     # 合同到期前 N 天提醒
+    stock_low_threshold: int = 5       # 库存预警阈值
+
+    # 阿里云短信（后续接入：填密钥并设 ALIYUN_SMS_ENABLED=true）
+    aliyun_sms_enabled: bool = False
+    aliyun_access_key_id: str = ""
+    aliyun_access_key_secret: str = ""
+    aliyun_sms_sign_name: str = ""
+    aliyun_sms_template_finance: str = ""
+    aliyun_sms_template_contract: str = ""
+    aliyun_sms_template_stock: str = ""
+
+    @property
+    def llm_api_key(self) -> str:
+        if "dashscope.aliyuncs.com" in self.openai_base_url and self.dashscope_api_key:
+            return self.dashscope_api_key
+        return self.openai_api_key
 
 
 settings = Settings()

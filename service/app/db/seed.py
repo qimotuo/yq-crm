@@ -14,57 +14,68 @@ DEFAULT_ROLES = [
     },
     {
         "name": "销售", "code": "sales",
-        "menuKeys": ["/dashboard", "/public-pool", "/my-customers", "/contacts", "/follow-ups",
-                     "/schedules", "/work-orders", "/stock", "/customers"],
-        "operations": ["customer:view", "customer:create", "customer:import", "customer:claim", "customer:return",
-                       "customer:follow", "customer:call", "schedule:view", "schedule:create", "schedule:edit",
-                       "workorder:view", "workorder:create",
-                       "workorder:edit", "workorder:delete", "workorder:print", "stock:view", "stock:out",
-                       "finance:view", "contract:view", "trace:view"],
+        "menuKeys": ["/dashboard", "/ai-agent", "/public-pool", "/my-customers", "/contacts", "/follow-ups",
+                     "/schedules", "/work-orders", "/stock", "/customers", "/finance", "/contracts"],
+        "operations": ["public-pool:view", "public-pool:create", "public-pool:import", "public-pool:claim",
+                       "my-customer:view", "my-customer:create", "my-customer:edit", "my-customer:import",
+                       "my-customer:return", "my-customer:follow", "my-customer:call",
+                       "my-customer:wechat", "my-customer:workorder",
+                       "contact:view", "contact:create", "contact:edit", "contact:import", "contact:call",
+                       "follow:view", "follow:create",
+                       "schedule:view", "schedule:create", "schedule:edit",
+                       "workorder:view", "workorder:create", "workorder:edit", "workorder:delete", "workorder:print",
+                       "stock:view", "stock:out", "stock:out:import", "stock:in:import", "stock:sim:import",
+                       "customer:view", "customer:create", "customer:edit", "customer:delete", "customer:import", "customer:payment-log",
+                       "finance:view", "contract:view", "contract:print", "trace:view"],
         "dataScope": "SELF", "enabled": True,
     },
     {
         "name": "安装人员", "code": "installer",
-        "menuKeys": ["/dashboard", "/install-register", "/stock"],
-        "operations": ["workorder:view", "workorder:install", "stock:view", "stock:out", "trace:view"],
+        "menuKeys": ["/dashboard", "/ai-agent", "/install-register", "/stock"],
+        "operations": ["install:view", "install:start", "install:register", "install:fail", "workorder:install",
+                       "stock:view", "stock:out", "stock:out:import", "stock:in:import", "stock:sim:import", "trace:view"],
         "dataScope": "ASSIGNED", "enabled": True,
     },
     {
         "name": "财务", "code": "finance",
-        "menuKeys": ["/dashboard", "/customers", "/finance", "/contracts", "/integrated", "/report-trace"],
-        "operations": ["customer:view", "finance:view", "finance:create", "finance:import",
+        "menuKeys": ["/dashboard", "/ai-agent", "/customers", "/finance", "/contracts", "/integrated", "/report-trace"],
+        "operations": ["customer:view", "customer:payment", "customer:payment-log", "finance:view", "finance:create", "finance:edit", "finance:import",
                        "finance:payment", "finance:send", "finance:export",
-                       "contract:view", "contract:create", "contract:import", "contract:generate",
-                       "trace:view"],
+                       "integrated:view", "integrated:import", "integrated:export", "integrated:edit",
+                       "integrated:payment", "integrated:send", "integrated:asset",
+                       "contract:view", "contract:create", "contract:edit", "contract:import", "contract:export",
+                       "contract:generate", "contract:print", "trace:view"],
         "dataScope": "ALL", "enabled": True,
     },
     {
         "name": "仓储管理员", "code": "warehouse",
-        "menuKeys": ["/dashboard", "/stock"],
-        "operations": ["stock:view", "stock:in", "stock:out", "stock:export"],
+        "menuKeys": ["/dashboard", "/ai-agent", "/stock"],
+        "operations": ["stock:view", "stock:in", "stock:in:edit", "stock:in:delete", "stock:in:import", "stock:in:export",
+                       "stock:sim", "stock:sim:edit", "stock:sim:delete", "stock:sim:import", "stock:sim:export",
+                       "stock:out", "stock:out:import", "stock:out:export", "stock:import", "stock:export", "stock:config"],
         "dataScope": "ALL", "enabled": True,
     },
     {
         "name": "账户负责人", "code": "account_owner",
-        "menuKeys": ["/dashboard", "/account-ledger"],
+        "menuKeys": ["/dashboard", "/ai-agent", "/account-ledger"],
         "operations": ["account-ledger:view", "account-ledger:create", "account-ledger:delete"],
         "dataScope": "ALL", "enabled": True,
     },
     {
         "name": "行政", "code": "admin_staff",
-        "menuKeys": ["/dashboard", "/admin-ledger"],
-        "operations": ["admin-ledger:view", "admin-ledger:create", "admin-ledger:delete"],
+        "menuKeys": ["/dashboard", "/ai-agent", "/admin-ledger"],
+        "operations": ["admin-ledger:view", "admin-ledger:import"],
         "dataScope": "ALL", "enabled": True,
     },
 ]
 
 SEED_USERS = [
-    {"username": "admin", "name": "管理员", "role": "admin"},
-    {"username": "zhangsan", "name": "张三", "role": "sales"},
-    {"username": "zhaoyun", "name": "赵云", "role": "installer"},
-    {"username": "finance", "name": "财务小李", "role": "finance"},
-    {"username": "xiaoyi", "name": "小伊姐", "role": "account_owner"},
-    {"username": "xingzheng", "name": "行政小王", "role": "admin_staff"},
+    {"username": "admin", "name": "管理员", "role": "admin", "deptCode": "admin"},
+    {"username": "zhangsan", "name": "张三", "role": "sales", "deptCode": "sales"},
+    {"username": "zhaoyun", "name": "赵云", "role": "installer", "deptCode": "ops"},
+    {"username": "finance", "name": "财务小李", "role": "finance", "deptCode": "finance"},
+    {"username": "xiaoyi", "name": "小伊姐", "role": "account_owner", "deptCode": "admin"},
+    {"username": "xingzheng", "name": "行政小王", "role": "admin_staff", "deptCode": "admin"},
 ]
 
 
@@ -97,6 +108,7 @@ def seed_users(db: Session) -> None:
                 name=item["name"],
                 role_code=item["role"],
                 enabled=True,
+                dept_code=item.get("deptCode") or "",
             )
         )
     db.commit()
@@ -138,17 +150,17 @@ def seed_follow_ups(db: Session) -> None:
         return
     samples = [
         {
-            "customer_id": 1, "customer_name": "智慧社区A区物业", "sales_name": "张三",
+            "customer_id": 1, "customer_name": "智慧社区A区物业", "store_name": "红渡小香", "sales_name": "张三",
             "type": "电话", "content": "确认安装时间，客户要求加路由器", "next_plan": "2026-10-26 上门",
             "status": "已完成", "create_time": "2026-10-25 14:30",
         },
         {
-            "customer_id": 2, "customer_name": "滨江工业园管委会", "sales_name": "李四",
+            "customer_id": 2, "customer_name": "滨江工业园管委会", "store_name": "厚贞日式烤肉", "sales_name": "李四",
             "type": "微信", "content": "发送了套餐报价", "next_plan": "2026-10-28 回访",
             "status": "待完成", "create_time": "2026-10-26 10:00",
         },
         {
-            "customer_id": 4, "customer_name": "科技初创公司B", "sales_name": "赵六",
+            "customer_id": 4, "customer_name": "科技初创公司B", "store_name": "稻状元", "sales_name": "赵六",
             "type": "上门", "content": "现场勘察网络环境，需10账号", "next_plan": "2026-11-01 安装",
             "status": "待完成", "create_time": "2026-10-30 16:20",
         },
@@ -160,6 +172,7 @@ def seed_follow_ups(db: Session) -> None:
                 user_id=owner.id,
                 customer_id=s["customer_id"],
                 customer_name=s["customer_name"],
+                store_name=s.get("store_name", ""),
                 sales_name=s["sales_name"],
                 type=s["type"],
                 content=s["content"],
@@ -187,10 +200,30 @@ def seed_demo_notifications(db: Session) -> None:
         notify_service.ensure_schedule_reminders(db, zhangsan.id)
 
 
+def refresh_demo_schedule_dates(db: Session) -> None:
+    today = date.today().isoformat()
+    stale = (
+        db.query(Schedule)
+        .filter(Schedule.status == "待执行", Schedule.date < today)
+        .order_by(Schedule.date.desc())
+        .all()
+    )
+    if not stale:
+        return
+    for row in stale[:3]:
+        row.date = today
+    db.commit()
+
+
 def init_database(db: Session) -> None:
     seed_roles(db)
+    # 已有用户说明不是空库。空表不再回灌演示客户/工单，避免清库后重启被种子数据填满。
+    fresh = db.query(User).count() == 0
     seed_users(db)
+    if not fresh:
+        return
     seed_business_data(db)
     seed_schedules(db)
+    refresh_demo_schedule_dates(db)
     seed_follow_ups(db)
     seed_demo_notifications(db)

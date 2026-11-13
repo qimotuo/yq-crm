@@ -16,6 +16,10 @@ class FinanceCreateRequest(BaseModel):
     contractStatus: str = "正常"
 
 
+class FinanceUpdateRequest(FinanceCreateRequest):
+    id: int
+
+
 class FinanceImportRow(BaseModel):
     storeName: str = Field(..., min_length=1)
     customerName: str = Field(..., min_length=1)
