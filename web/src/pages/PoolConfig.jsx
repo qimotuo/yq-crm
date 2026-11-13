@@ -1,13 +1,17 @@
 import { useEffect, useState } from 'react'
-import { Card, Form, InputNumber, Input, Switch, Button, message, Descriptions, Tag, Table } from 'antd'
-import { SaveOutlined } from '@ant-design/icons'
-import { getPoolConfig, updatePoolConfig, getReturnLogs } from '../api'
+import { Card, Form, InputNumber, Input, Switch, Button, message, Descriptions, Tag, Table, Space } from 'antd'
+import { Permission } from '../components/RequireAuth'
+import { SaveOutlined, SyncOutlined } from '@ant-design/icons'
+import { getPoolConfig, updatePoolConfig, getReturnLogs, runPoolAutoReturn } from '../api'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 export default function PoolConfig() {
   const [loading, setLoading] = useState(false)
+  const [scanLoading, setScanLoading] = useState(false)
   const [logsLoading, setLogsLoading] = useState(true)
   const [config, setConfig] = useState(null)
   const [logs, setLogs] = useState([])
+  const { pagination } = useTablePagination(10, logs.length)
   const [form] = Form.useForm()
 
   const loadLogs = () => {
@@ -29,6 +33,23 @@ export default function PoolConfig() {
       message.success('公海池策略已保存')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleScan = async () => {
+    setScanLoading(true)
+    try {
+      const res = await runPoolAutoReturn()
+      if (res.skipped) {
+        message.warning(res.reason || '未执行扫描')
+      } else {
+        message.success(res.count ? `已自动退回 ${res.count} 条客户` : '扫描完成，暂无可退回客户')
+      }
+      loadLogs()
+    } catch (e) {
+      message.error(e.message || '扫描失败')
+    } finally {
+      setScanLoading(false)
     }
   }
 
@@ -56,7 +77,7 @@ export default function PoolConfig() {
             <Input.TextArea rows={2} placeholder="描述公海池用途、覆盖区域等" />
           </Form.Item>
           <Form.Item name="returnDays" label="未跟进自动退回天数" rules={[{ required: true }]}
-            extra="超过该天数未跟进，客户自动退回公海池（定时任务每日扫描）">
+            extra="超过该天数未跟进（无跟进记录则按领取时间），未成交私海客户将自动退回；服务启动后定时扫描">
             <InputNumber min={1} max={90} addonAfter="天" style={{ width: 200 }} />
           </Form.Item>
           <Form.Item name="notifyBeforeReturn" label="退回前通知销售" valuePropName="checked">
@@ -65,7 +86,14 @@ export default function PoolConfig() {
           <Form.Item name="enabled" label="启用自动退回" valuePropName="checked">
             <Switch />
           </Form.Item>
-          <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSave}>保存配置</Button>
+          <Space>
+            <Permission code="pool-config:edit">
+              <Button type="primary" icon={<SaveOutlined />} loading={loading} onClick={handleSave}>保存配置</Button>
+            </Permission>
+            <Permission code="pool-config:scan">
+              <Button icon={<SyncOutlined />} loading={scanLoading} onClick={handleScan}>立即扫描退回</Button>
+            </Permission>
+          </Space>
         </Form>
       </Card>
 
@@ -83,7 +111,7 @@ export default function PoolConfig() {
       )}
 
       <Card title="退回记录留痕">
-        <Table columns={logColumns} dataSource={logs} rowKey="id" size="small" loading={logsLoading} pagination={{ pageSize: 8 }} />
+        <Table columns={logColumns} dataSource={logs} rowKey="id" size="small" loading={logsLoading} pagination={pagination} />
       </Card>
     </div>
   )

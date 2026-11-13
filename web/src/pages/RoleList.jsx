@@ -5,6 +5,7 @@ import { getRoles, updateRole } from '../api'
 import { MENU_TREE, OPERATION_GROUPS, DATA_SCOPES, ROLE_COLORS, ALL_MENU_KEYS } from '../rbac/config'
 import { Permission } from '../components/RequireAuth'
 import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton, applyFilterPatch } from '../components/ListToolbar'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const EMPTY_FILTERS = { keyword: '', dataScope: '', enabled: '' }
 
@@ -37,6 +38,7 @@ export default function RoleList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
+  const { pagination } = useTablePagination(10, data.length)
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
   const [query, setQuery] = useState({ ...EMPTY_FILTERS })
   const [editing, setEditing] = useState(null)
@@ -167,7 +169,7 @@ export default function RoleList() {
         dataSource={data}
         rowKey="id"
         loading={loading}
-        pagination={{ total, showTotal: (t) => `共 ${t} 条` }}
+        pagination={{ ...pagination, total, showTotal: (t) => `共 ${t} 条` }}
       />
 
       <Drawer
@@ -208,7 +210,10 @@ export default function RoleList() {
                     <Checkbox.Group
                       disabled={isAdmin}
                       value={operations}
-                      onChange={setOperations}
+                      onChange={(checked) => {
+                        const codes = new Set(g.ops.map((o) => o.code))
+                        setOperations((prev) => [...prev.filter((c) => !codes.has(c)), ...checked])
+                      }}
                       options={g.ops.map((o) => ({ label: o.label, value: o.code }))}
                       style={{ display: 'flex', flexDirection: 'column', gap: 6 }}
                     />

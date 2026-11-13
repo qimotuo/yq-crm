@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Modal, Form, Input, DatePicker, message } from 'antd'
 import dayjs from 'dayjs'
 import { createWorkOrder, updateWorkOrder } from '../api/workOrder'
+import FormColumnLayout, { modalFormWidth } from './FormColumnLayout'
 
 export function useWorkOrderForm() {
   const [modalOpen, setModalOpen] = useState(false)
@@ -31,6 +32,7 @@ export default function WorkOrderFormModal({ open, editing, onCancel, onSuccess 
   const handleSave = async () => {
     const values = await form.validateFields()
     if (values.installDate?.format) values.installDate = values.installDate.format('YYYY-MM-DD')
+    if (values.installDate && !values.installTimeSlot) values.installTimeSlot = values.installDate
     setSaving(true)
     try {
       if (editing) {
@@ -54,10 +56,11 @@ export default function WorkOrderFormModal({ open, editing, onCancel, onSuccess 
       onOk={handleSave}
       onCancel={onCancel}
       confirmLoading={saving}
-      width={600}
+      width={modalFormWidth(7)}
       destroyOnClose
     >
       <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+        <FormColumnLayout>
         <Form.Item name="storeName" label="店名" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="customerName" label="客户名称" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="address" label="安装地址" rules={[{ required: true }]}><Input /></Form.Item>
@@ -65,6 +68,8 @@ export default function WorkOrderFormModal({ open, editing, onCancel, onSuccess 
         <Form.Item name="contactPhone" label="联系电话" rules={[{ required: true }]}><Input /></Form.Item>
         <Form.Item name="installDate" label="预约安装日期"><DatePicker style={{ width: '100%' }} /></Form.Item>
         <Form.Item name="remark" label="安装备注"><Input.TextArea rows={2} /></Form.Item>
+        <Form.Item name="price" label="价格"><Input placeholder="2880 或 2880x2=5760" /></Form.Item>
+        </FormColumnLayout>
       </Form>
     </Modal>
   )

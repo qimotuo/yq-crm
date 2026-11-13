@@ -3,42 +3,60 @@ import { Table, Button, Tag, Modal, Form, Input, Select, DatePicker, message, Al
 import { PlusOutlined, BellOutlined, CheckOutlined } from '@ant-design/icons'
 import { getSchedules, createSchedule, completeSchedule } from '../api/notify'
 import { useAuth } from '../hooks/useAuth'
-import { ListToolbar, QueryButton, ResetButton, FilterSelect } from '../components/ListToolbar'
+import { ListToolbar, QueryButton, ResetButton, FilterSelect, FilterInput, FilterField } from '../components/ListToolbar'
+import { Permission } from '../components/RequireAuth'
+import ExportButton from '../components/ExportButton'
 import dayjs from 'dayjs'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const typeColors = { 上门: 'blue', 电话: 'green', 安装: 'orange' }
 
 export default function ScheduleList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const { pagination } = useTablePagination(10, data.length)
+  const [titleFilter, setTitleFilter] = useState('')
+  const [dateFilter, setDateFilter] = useState(null)
+  const [timeFilter, setTimeFilter] = useState('')
+  const [typeFilter, setTypeFilter] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [form] = Form.useForm()
   const { user } = useAuth()
   const today = dayjs().format('YYYY-MM-DD')
 
-  const load = async (status = statusFilter) => {
+  const buildParams = (opts = {}) => {
+    const title = opts.title ?? titleFilter
+    const date = opts.date ?? dateFilter
+    const time = opts.time ?? timeFilter
+    const type = opts.type ?? typeFilter
+    const status = opts.status ?? statusFilter
+    const params = {}
+    if (title.trim()) params.title = title.trim()
+    if (date) params.date = date.format('YYYY-MM-DD')
+    if (time.trim()) params.time = time.trim()
+    if (type) params.type = type
+    if (status) params.status = status
+    return params
+  }
+
+  const load = async (opts = {}) => {
     setLoading(true)
     try {
-      const res = await getSchedules({})
-      let list = res.list
-      if (user.role === 'sales') list = list.filter((s) => s.salesName === user.name)
-      if (status) list = list.filter((s) => s.status === status)
-      setData(list)
+      const res = await getSchedules(buildParams(opts))
+      setData(res.list)
     } finally {
       setLoading(false)
     }
   }
 
-  const onStatusChange = (v) => {
-    const status = v || ''
-    setStatusFilter(status)
-    load(status)
-  }
-
   const handleReset = () => {
+    setTitleFilter('')
+    setDateFilter(null)
+    setTimeFilter('')
+    setTypeFilter('')
     setStatusFilter('')
-    load('')
+    load({ title: '', date: null, time: '', type: '', status: '' })
   }
 
   useEffect(() => { load() }, [])
@@ -72,7 +90,9 @@ export default function ScheduleList() {
     {
       title: '操作', width: 90,
       render: (_, r) => r.status === '待执行' ? (
-        <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleComplete(r.id)}>完成</Button>
+        <Permission code="schedule:edit">
+          <Button type="link" size="small" icon={<CheckOutlined />} onClick={() => handleComplete(r.id)}>完成</Button>
+        </Permission>
       ) : null,
     },
   ]
@@ -93,18 +113,54 @@ export default function ScheduleList() {
       <ListToolbar
         filters={(
           <>
-            <FilterSelect placeholder="状态筛选" value={statusFilter || undefined} onChange={onStatusChange}
-              options={['待执行', '已完成'].map((v) => ({ value: v, label: v }))} />
+            <FilterInput
+              placeholder="标题"
+              value={titleFilter}
+              onChange={(e) => setTitleFilter(e.target.value)}
+              onPressEnter={() => load()}
+            />
+            <DatePicker
+              className="stock-filter-date"
+              placeholder="日期"
+              value={dateFilter}
+              onChange={setDateFilter}
+              allowClear
+            />
+            <FilterField
+              placeholder="时间"
+              value={timeFilter}
+              onChange={(e) => setTimeFilter(e.target.value)}
+              onPressEnter={() => load()}
+            />
+            <FilterSelect
+              placeholder="类型"
+              value={typeFilter || undefined}
+              onChange={(v) => setTypeFilter(v || '')}
+              options={['上门', '电话', '安装'].map((v) => ({ value: v, label: v }))}
+            />
+            <FilterSelect
+              placeholder="状态"
+              value={statusFilter || undefined}
+              onChange={(v) => setStatusFilter(v || '')}
+              options={['待执行', '已完成'].map((v) => ({ value: v, label: v }))}
+            />
             <QueryButton loading={loading} onClick={() => load()} />
             <ResetButton onClick={handleReset} />
           </>
         )}
         actions={(
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>添加日程</Button>
+          <>
+            <Permission code="schedule:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>添加日程</Button>
+            </Permission>
+            <Permission code="schedule:export">
+              <ExportButton filename="schedules.csv" label="导出" data={data} columns={columns} />
+            </Permission>
+          </>
         )}
       />
 
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={pagination} />
 
       <Modal title="添加日程" open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)} destroyOnClose>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>

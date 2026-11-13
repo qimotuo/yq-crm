@@ -5,6 +5,10 @@ import { getFollowUps, createFollowUp, getCustomers } from '../api'
 import { useAuth } from '../hooks/useAuth'
 import { openCreateForm, closeFormModal } from '../utils/formModal'
 import { ListToolbar, FilterInput, FilterField, FilterSelect, QueryButton, ResetButton, applyFilterPatch } from '../components/ListToolbar'
+import { Permission } from '../components/RequireAuth'
+import ExportButton from '../components/ExportButton'
+import { useTablePagination } from '../hooks/useTablePagination'
+import { canFilterBySales } from '../rbac/utils'
 
 const EMPTY_FILTERS = { customer: '', type: '', sales: '', content: '', status: '' }
 
@@ -14,6 +18,7 @@ const statusColor = { 已完成: 'success', 待完成: 'warning' }
 export default function FollowUpList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const { pagination } = useTablePagination(10, data.length)
   const [customers, setCustomers] = useState([])
   const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
   const [query, setQuery] = useState({ ...EMPTY_FILTERS })
@@ -23,7 +28,7 @@ export default function FollowUpList() {
   const [timelineTitle, setTimelineTitle] = useState('')
   const [form] = Form.useForm()
   const { user } = useAuth()
-  const isSales = user.role === 'sales'
+  const filterBySales = canFilterBySales()
 
   const load = async (q = query) => {
     setLoading(true)
@@ -35,9 +40,7 @@ export default function FollowUpList() {
       if (q.content) params.keyword = q.content
       if (q.status) params.status = q.status
       const res = await getFollowUps(params)
-      let list = res.list
-      if (isSales) list = list.filter((f) => f.salesName === user.name)
-      setData(list)
+      setData(res.list)
     } finally {
       setLoading(false)
     }
@@ -62,8 +65,7 @@ export default function FollowUpList() {
   }
 
   useEffect(() => {
-    const params = isSales ? { salesName: user.name } : {}
-    getCustomers(params).then((res) => setCustomers(res.list))
+    getCustomers().then((res) => setCustomers(res.list))
     load()
   }, [])
 
@@ -74,6 +76,7 @@ export default function FollowUpList() {
       ...values,
       customerId: values.customerId,
       customerName: customer?.customerName || values.customerName,
+      storeName: customer?.storeName || '',
       salesName: user.name,
       status: values.status || (values.nextPlan ? '待完成' : '已完成'),
     })
@@ -99,6 +102,7 @@ export default function FollowUpList() {
 
   const columns = [
     { title: '时间', dataIndex: 'createTime', width: 140 },
+    { title: '店名', dataIndex: 'storeName', width: 120, ellipsis: true, render: (v) => v || '-' },
     {
       title: '客户', dataIndex: 'customerName', width: 140, ellipsis: true,
       render: (v) => <a onClick={() => showTimeline(v)}>{v}</a>,
@@ -132,8 +136,8 @@ export default function FollowUpList() {
               options={customers.map((c) => ({ value: c.id, label: c.customerName }))} />
             <FilterSelect placeholder="跟进方式" value={filters.type || undefined} onChange={onSelectFilter('type')}
               options={['电话', '微信', '上门'].map((v) => ({ value: v, label: v }))} />
-            {!isSales && (
-              <FilterField placeholder="销售名称" value={filters.sales} onChange={(e) => setFilter('sales', e.target.value)} onPressEnter={handleSearch} />
+            {filterBySales && (
+              <FilterField placeholder="负责销售" value={filters.sales} onChange={(e) => setFilter('sales', e.target.value)} onPressEnter={handleSearch} />
             )}
             <FilterField placeholder="跟进内容" value={filters.content} onChange={(e) => setFilter('content', e.target.value)} onPressEnter={handleSearch} />
             <FilterSelect placeholder="状态" value={filters.status || undefined} onChange={onSelectFilter('status')}
@@ -143,10 +147,17 @@ export default function FollowUpList() {
           </>
         )}
         actions={(
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增跟进</Button>
+          <>
+            <Permission code="follow:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增跟进</Button>
+            </Permission>
+            <Permission code="follow:export">
+              <ExportButton filename="follow-ups.csv" label="导出" data={data} columns={columns} />
+            </Permission>
+          </>
         )}
       />
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 940 }} pagination={{ pageSize: 10 }} />
+      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 1060 }} pagination={pagination} />
 
       <Modal title="新增跟进记录" open={modalOpen} onOk={handleCreate} onCancel={() => closeFormModal(form, setModalOpen)} destroyOnClose>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }} preserve={false}>

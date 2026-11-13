@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { useLocation } from 'react-router-dom'
 import { Table, Button, Space, Input, Select, Modal, Form, DatePicker, message, Popconfirm, Descriptions } from 'antd'
+import dayjs from 'dayjs'
 import { PlusOutlined, EditOutlined, EyeOutlined, PrinterOutlined } from '@ant-design/icons'
 import { getWorkOrders, createWorkOrder, deleteWorkOrder, updateWorkOrder } from '../api/workOrder'
 import { OrderStatusTag } from '../components/StatusTag'
@@ -8,10 +9,15 @@ import ServiceOrderPrint from '../components/ServiceOrderPrint'
 import { Permission } from '../components/RequireAuth'
 import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
 import { openCreateForm, closeFormModal } from '../utils/formModal'
+import FormColumnLayout, { modalFormWidth } from '../components/FormColumnLayout'
+import ChangeLogButton from '../components/ChangeLogButton'
+import ExportButton from '../components/ExportButton'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 export default function WorkOrderList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const { pagination } = useTablePagination(10, data.length)
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
@@ -65,13 +71,17 @@ export default function WorkOrderList() {
 
   const openEdit = (record) => {
     setEditing(record)
-    form.setFieldsValue(record)
+    form.setFieldsValue({
+      ...record,
+      installDate: record.installDate ? dayjs(record.installDate) : undefined,
+    })
     setModalOpen(true)
   }
 
   const handleSave = async () => {
     const values = await form.validateFields()
     if (values.installDate?.format) values.installDate = values.installDate.format('YYYY-MM-DD')
+    if (values.installDate && !values.installTimeSlot) values.installTimeSlot = values.installDate
     if (editing) {
       await updateWorkOrder(editing.id, values)
       message.success('工单已更新')
@@ -100,22 +110,23 @@ export default function WorkOrderList() {
     { title: '安装日期', dataIndex: 'installDate', width: 110 },
     { title: '状态', dataIndex: 'status', width: 90, render: (s) => <OrderStatusTag status={s} /> },
     {
-      title: '操作', width: 180, fixed: 'right',
+      title: '操作', width: 250, fixed: 'right',
       render: (_, r) => (
-        <Space size="small">
+        <Space size="small" wrap>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => { setCurrent(r); setDetailModal(true) }}>详情</Button>
-          <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => { setCurrent(r); setPrintOpen(true) }}>打印</Button>
+          <ChangeLogButton module="工单" targetId={r.id} />
+          <Permission code="workorder:print">
+            <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => { setCurrent(r); setPrintOpen(true) }}>打印</Button>
+          </Permission>
+          <Permission code="workorder:edit">
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+          </Permission>
           {r.status === '待派工' && (
-            <>
-              <Permission code="workorder:edit">
-                <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
-              </Permission>
-              <Permission code="workorder:delete">
-                <Popconfirm title="确认删除？" onConfirm={() => handleDelete(r.id)}>
-                  <Button type="link" danger size="small">删除</Button>
-                </Popconfirm>
-              </Permission>
-            </>
+            <Permission code="workorder:delete">
+              <Popconfirm title="确认删除？" onConfirm={() => handleDelete(r.id)}>
+                <Button type="link" danger size="small">删除</Button>
+              </Popconfirm>
+            </Permission>
           )}
         </Space>
       ),
@@ -139,15 +150,21 @@ export default function WorkOrderList() {
           </>
         )}
         actions={(
-          <Permission code="workorder:create">
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
-          </Permission>
+          <>
+            <Permission code="workorder:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
+            </Permission>
+            <Permission code="workorder:export">
+              <ExportButton filename="work-orders.csv" label="导出" data={data} columns={columns} />
+            </Permission>
+          </>
         )}
       />
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 1400 }} pagination={{ pageSize: 10, showTotal: (t) => `共 ${t} 条` }} />
+      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 1400 }} pagination={{ ...pagination, showTotal: (t) => `共 ${t} 条` }} />
 
-      <Modal title={editing ? '编辑工单' : '新建安装工单'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)} width={600} destroyOnClose>
+      <Modal title={editing ? '编辑工单' : '新建安装工单'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)} width={modalFormWidth(7)} destroyOnClose>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <FormColumnLayout>
           <Form.Item name="storeName" label="店名" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="customerName" label="客户名称" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="address" label="安装地址" rules={[{ required: true }]}><Input /></Form.Item>
@@ -155,6 +172,8 @@ export default function WorkOrderList() {
           <Form.Item name="contactPhone" label="联系电话" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="installDate" label="预约安装日期"><DatePicker style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="remark" label="安装备注"><Input.TextArea rows={2} /></Form.Item>
+          <Form.Item name="price" label="价格"><Input placeholder="2880 或 2880x2=5760" /></Form.Item>
+          </FormColumnLayout>
         </Form>
       </Modal>
 
@@ -168,6 +187,8 @@ export default function WorkOrderList() {
             <Descriptions.Item label="地址" span={2}>{current.address}</Descriptions.Item>
             <Descriptions.Item label="联系人">{current.contact}</Descriptions.Item>
             <Descriptions.Item label="电话">{current.contactPhone}</Descriptions.Item>
+            <Descriptions.Item label="预约日期">{current.installDate || current.installTimeSlot || '-'}</Descriptions.Item>
+            <Descriptions.Item label="价格">{current.price || '-'}</Descriptions.Item>
             <Descriptions.Item label="备注" span={2}>{current.remark || '-'}</Descriptions.Item>
           </Descriptions>
         )}

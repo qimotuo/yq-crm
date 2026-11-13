@@ -5,7 +5,9 @@ import { getContacts, createContact, updateContact, importContacts } from '../ap
 import { callPhone } from '../components/PhoneBar'
 import { Permission } from '../components/RequireAuth'
 import { ListToolbar, FilterInput, QueryButton, ResetButton } from '../components/ListToolbar'
-import { downloadCsvTemplate, parseCsvFile } from '../utils/csvImport'
+import { downloadCsvTemplate, parseImportFile, IMPORT_ACCEPT } from '../utils/csvImport'
+import ExportButton from '../components/ExportButton'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const CONTACT_TEMPLATE = {
   filename: '联系人导入模板.csv',
@@ -20,6 +22,7 @@ const PHONE_RULE = [{ pattern: /^1\d{10}$/, message: '请输入11位手机号' }
 export default function ContactList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const { pagination } = useTablePagination(10, data.length)
   const [keyword, setKeyword] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [editing, setEditing] = useState(null)
@@ -61,8 +64,7 @@ export default function ContactList() {
 
   const handleImport = async (file) => {
     try {
-      const text = await file.text()
-      const rows = parseCsvFile(text, CONTACT_TEMPLATE)
+      const rows = await parseImportFile(file, CONTACT_TEMPLATE)
       const res = await importContacts(rows)
       message.success(`成功导入 ${res.count} 条联系人`)
       load()
@@ -76,12 +78,20 @@ export default function ContactList() {
     { title: '客户名称', dataIndex: 'customerName', width: 160 },
     { title: '店名', dataIndex: 'storeName', width: 120 },
     { title: '姓名', dataIndex: 'name', width: 80 },
-    { title: '手机号', dataIndex: 'phone', width: 130, render: (v) => <a onClick={() => callPhone(v)}><PhoneOutlined /> {v}</a> },
+    { title: '手机号', dataIndex: 'phone', width: 130, render: (v, r) => (
+      <Permission code="contact:call" fallback={v}>
+        <a onClick={() => callPhone(v, { customerName: r.customerName })}><PhoneOutlined /> {v}</a>
+      </Permission>
+    ) },
     { title: '职务', dataIndex: 'title', width: 100 },
     { title: '主联系人', dataIndex: 'isPrimary', width: 90, render: (v) => v ? <Tag color="blue">是</Tag> : <Tag>否</Tag> },
     {
       title: '操作', width: 80,
-      render: (_, r) => <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>,
+      render: (_, r) => (
+        <Permission code="contact:edit">
+          <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+        </Permission>
+      ),
     },
   ]
 
@@ -101,17 +111,22 @@ export default function ContactList() {
         )}
         actions={(
           <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增联系人</Button>
-            <Permission code="customer:import">
+            <Permission code="contact:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增联系人</Button>
+            </Permission>
+            <Permission code="contact:import">
               <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(CONTACT_TEMPLATE)}>下载模板</Button>
-              <Upload showUploadList={false} accept=".csv" beforeUpload={handleImport}>
+              <Upload showUploadList={false} accept={IMPORT_ACCEPT} beforeUpload={handleImport}>
                 <Button icon={<UploadOutlined />}>导入 Excel</Button>
               </Upload>
+            </Permission>
+            <Permission code="contact:export">
+              <ExportButton filename="contacts.csv" label="导出" data={data} columns={columns} />
             </Permission>
           </>
         )}
       />
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={pagination} />
 
       <Modal title={editing ? '编辑联系人' : '新增联系人'} open={modalOpen} onOk={handleSave} onCancel={() => setModalOpen(false)} destroyOnClose>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>

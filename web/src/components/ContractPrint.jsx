@@ -26,6 +26,9 @@ export default function ContractPrint({ contract, onClose }) {
         <Divider />
         <Descriptions column={1} size="small">
           <Descriptions.Item label="甲方（客户）">{contract.customerName}（{contract.storeName}）</Descriptions.Item>
+          <Descriptions.Item label="签署人">{contract.signerName || '-'}</Descriptions.Item>
+          <Descriptions.Item label="手机号">{contract.signerPhone || '-'}</Descriptions.Item>
+          <Descriptions.Item label="身份证号">{contract.signerIdNo || '-'}</Descriptions.Item>
           <Descriptions.Item label="乙方（服务商）">YQ 宽带物联网科技有限公司</Descriptions.Item>
           <Descriptions.Item label="关联工单">{contract.orderNo}</Descriptions.Item>
           <Descriptions.Item label="合作套餐">{contract.package}</Descriptions.Item>
@@ -44,7 +47,7 @@ export default function ContractPrint({ contract, onClose }) {
           <span>甲方签章：____________</span>
           <span>乙方签章：____________</span>
         </div>
-        <p style={{ textAlign: 'right', marginTop: 24, color: '#999' }}>签订日期：{contract.startDate}</p>
+        <p style={{ textAlign: 'right', marginTop: 24, color: '#999' }}>签订日期：{contract.signDate || contract.startDate}</p>
       </div>
     </Modal>
   )

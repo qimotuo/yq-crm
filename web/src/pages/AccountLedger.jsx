@@ -4,20 +4,38 @@ import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { getAccountLedger, createAccountLedger, deleteAccountLedger } from '../api'
 import { Permission } from '../components/RequireAuth'
+import ExportButton from '../components/ExportButton'
+import { ListToolbar, FilterInput, FilterField, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
 import { formatMoney } from '../utils/helpers'
 import { useAuth } from '../hooks/useAuth'
 import {
   ACCOUNT_SECTIONS, ACCOUNT_IN_CATEGORIES, ACCOUNT_OUT_CATEGORIES, getAccountRemarkRule,
 } from '../constants/ledger'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const dirLabel = { in: '入账', out: '出账' }
 const dirColor = { in: 'green', out: 'red' }
+const EMPTY_FILTERS = { keyword: '', category: '', createdBy: '', amountMin: '', amountMax: '' }
+
+function matchAmountRange(amount, min, max) {
+  if (min !== '' && min != null) {
+    const n = Number(min)
+    if (!Number.isNaN(n) && amount < n) return false
+  }
+  if (max !== '' && max != null) {
+    const n = Number(max)
+    if (!Number.isNaN(n) && amount > n) return false
+  }
+  return true
+}
 
 export default function AccountLedger() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [section, setSection] = useState('基米网')
   const [direction, setDirection] = useState('in')
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+  const [query, setQuery] = useState({ ...EMPTY_FILTERS })
   const [month, setMonth] = useState(dayjs())
   const [modalOpen, setModalOpen] = useState(false)
   const [form] = Form.useForm()
@@ -36,7 +54,41 @@ export default function AccountLedger() {
 
   useEffect(() => { load() }, [monthStr, section])
 
-  const filtered = useMemo(() => data.filter((r) => r.direction === direction), [data, direction])
+  useEffect(() => {
+    setFilters({ ...EMPTY_FILTERS })
+    setQuery({ ...EMPTY_FILTERS })
+  }, [section, direction])
+
+  const directionData = useMemo(() => data.filter((r) => r.direction === direction), [data, direction])
+
+  const categoryOptions = useMemo(
+    () => (direction === 'in' ? ACCOUNT_IN_CATEGORIES : ACCOUNT_OUT_CATEGORIES).map((c) => ({ value: c, label: c })),
+    [direction],
+  )
+
+  const createdByOptions = useMemo(
+    () => [...new Set(directionData.map((r) => r.createdBy).filter(Boolean))].map((v) => ({ value: v, label: v })),
+    [directionData],
+  )
+
+  const filtered = useMemo(() => directionData.filter((r) => {
+    if (query.category && r.category !== query.category) return false
+    if (query.createdBy && r.createdBy !== query.createdBy) return false
+    if (!matchAmountRange(r.amount, query.amountMin, query.amountMax)) return false
+    if (query.keyword) {
+      const kw = query.keyword.trim().toLowerCase()
+      const text = `${r.remark || ''} ${r.remarkOption || ''}`.toLowerCase()
+      if (!text.includes(kw)) return false
+    }
+    return true
+  }), [directionData, query])
+  const { pagination } = useTablePagination(20, filtered.length)
+
+  const handleSearch = () => setQuery({ ...filters })
+  const handleReset = () => {
+    setFilters({ ...EMPTY_FILTERS })
+    setQuery({ ...EMPTY_FILTERS })
+  }
 
   const summary = useMemo(() => {
     const inSum = data.filter((r) => r.direction === 'in').reduce((s, r) => s + r.amount, 0)
@@ -121,22 +173,77 @@ export default function AccountLedger() {
         <Col span={8}><Card size="small"><Statistic title="结余" value={summary.balance} precision={2} prefix="¥" /></Card></Col>
       </Row>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-        <Tabs
-          activeKey={direction}
-          onChange={setDirection}
-          size="small"
-          items={[
-            { key: 'in', label: '入账' },
-            { key: 'out', label: '出账' },
-          ]}
-        />
-        <Permission code="account-ledger:create">
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>记一笔</Button>
-        </Permission>
-      </div>
+      <ListToolbar
+        filters={(
+          <Tabs
+            activeKey={direction}
+            onChange={setDirection}
+            size="small"
+            className="toolbar-tabs"
+            items={[
+              { key: 'in', label: '入账' },
+              { key: 'out', label: '出账' },
+            ]}
+          />
+        )}
+        actions={(
+          <>
+            <Permission code="account-ledger:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>记一笔</Button>
+            </Permission>
+            <Permission code="account-ledger:export">
+              <ExportButton filename="account-ledger.csv" label="导出" data={filtered} columns={columns} />
+            </Permission>
+          </>
+        )}
+      />
+      <ListToolbar
+        nested
+        filters={(
+          <>
+            <FilterInput
+              placeholder="搜索备注"
+              value={filters.keyword}
+              onChange={(e) => setFilters((f) => ({ ...f, keyword: e.target.value }))}
+              onPressEnter={handleSearch}
+            />
+            <FilterSelect
+              placeholder="分类"
+              value={filters.category || undefined}
+              onChange={(v) => setFilters((f) => ({ ...f, category: v || '' }))}
+              options={categoryOptions}
+            />
+            <FilterSelect
+              placeholder="录入人"
+              value={filters.createdBy || undefined}
+              onChange={(v) => setFilters((f) => ({ ...f, createdBy: v || '' }))}
+              options={createdByOptions}
+            />
+            <FilterField
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="最低金额"
+              value={filters.amountMin}
+              onChange={(e) => setFilters((f) => ({ ...f, amountMin: e.target.value }))}
+              onPressEnter={handleSearch}
+            />
+            <FilterField
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="最高金额"
+              value={filters.amountMax}
+              onChange={(e) => setFilters((f) => ({ ...f, amountMax: e.target.value }))}
+              onPressEnter={handleSearch}
+            />
+            <QueryButton loading={loading} onClick={handleSearch} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+      />
 
-      <Table rowKey="id" loading={loading} dataSource={filtered} columns={columns} scroll={{ x: 720 }} pagination={{ pageSize: 20 }} />
+      <Table rowKey="id" loading={loading} dataSource={filtered} columns={columns} scroll={{ x: 720 }} pagination={{ ...pagination, showTotal: (t) => `共 ${t} 条` }} />
 
       <Modal title={`记一笔 · ${section} · ${dirLabel[direction]}`} open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)} destroyOnHidden>
         <Form form={form} layout="vertical">

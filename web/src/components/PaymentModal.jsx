@@ -1,15 +1,18 @@
-import { Modal, Form, InputNumber, Upload, Switch } from 'antd'
+import { Modal, Form, InputNumber, Upload, Switch, message } from 'antd'
 import { UploadOutlined } from '@ant-design/icons'
 import { formatMoney } from '../utils/helpers'
+import { fileUrl, uploadFile } from '../api/upload'
 
 export default function PaymentModal({ open, record, onCancel, onSubmit, title = '录入回款' }) {
   const [form] = Form.useForm()
 
   const handleOk = async () => {
     const values = await form.validateFields()
+    const file = values.voucher?.[0]
+    const voucher = file?.response?.url || file?.url || ''
     await onSubmit({
       paidAmount: values.paidAmount,
-      voucher: values.voucher?.[0]?.name || '',
+      voucher,
       verified: values.verified ?? false,
     })
     form.resetFields()
@@ -18,6 +21,17 @@ export default function PaymentModal({ open, record, onCancel, onSubmit, title =
   const handleCancel = () => {
     form.resetFields()
     onCancel()
+  }
+
+  const customRequest = async ({ file, onSuccess, onError }) => {
+    try {
+      const data = await uploadFile(file, 'voucher')
+      onSuccess({ ...data, url: fileUrl(data.url) })
+      message.success('凭证已上传')
+    } catch (e) {
+      onError(e)
+      message.error(e.message || '上传失败')
+    }
   }
 
   return (
@@ -30,7 +44,16 @@ export default function PaymentModal({ open, record, onCancel, onSubmit, title =
               <InputNumber min={0} max={record.totalAmount} style={{ width: '100%' }} addonBefore="¥" />
             </Form.Item>
             <Form.Item name="voucher" label="汇款凭证" valuePropName="fileList" getValueFromEvent={(e) => e?.fileList}>
-              <Upload beforeUpload={() => false} maxCount={1} accept="image/*,.pdf">
+              <Upload
+                maxCount={1}
+                accept="image/*,.pdf"
+                listType="picture"
+                customRequest={customRequest}
+                onPreview={(file) => {
+                  const url = fileUrl(file.response?.url || file.url)
+                  if (url) window.open(url, '_blank')
+                }}
+              >
                 <span style={{ color: '#1677ff', cursor: 'pointer' }}><UploadOutlined /> 上传汇款单</span>
               </Upload>
             </Form.Item>

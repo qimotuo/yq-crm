@@ -24,6 +24,11 @@ const authSlice = createSlice({
       state.user = user
       state.permissions = permissions || {}
     },
+    updateUser(state, action) {
+      if (state.user) {
+        state.user = { ...state.user, ...action.payload }
+      }
+    },
     logout(state) {
       state.token = null
       state.user = null
@@ -35,7 +40,7 @@ const authSlice = createSlice({
   },
 })
 
-export const { setCredentials, logout, updatePermissions } = authSlice.actions
+export const { setCredentials, logout, updatePermissions, updateUser } = authSlice.actions
 
 const EMPTY_USER = {}
 const EMPTY_PERMISSIONS = {}

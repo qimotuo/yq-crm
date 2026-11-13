@@ -1,16 +1,20 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useDispatch } from 'react-redux'
-import { Card, Form, Input, Button, message, Select } from 'antd'
+import { Card, Form, Input, Button, message } from 'antd'
 import { UserOutlined, LockOutlined } from '@ant-design/icons'
 import { login } from '../api'
 import { setCredentials } from '../store/authSlice'
-import { APP_NAME } from '../constants/app'
+import { APP_NAME, APP_NAME_SHORT } from '../constants/app'
+import { getMobileHomePath } from '../utils/mobile'
+import { h5Path, isH5Path } from '../utils/basePath'
 
-export default function Login() {
+export default function Login({ mobile = false }) {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
   const dispatch = useDispatch()
+  const isMobileLogin = mobile || isH5Path(location.pathname)
 
   const onFinish = async (values) => {
     setLoading(true)
@@ -18,7 +22,12 @@ export default function Login() {
       const data = await login(values.username, values.password)
       dispatch(setCredentials({ token: data.token, user: data.user, permissions: data.permissions || {} }))
       message.success(`欢迎，${data.user.name}`)
-      navigate('/dashboard')
+      if (isMobileLogin) {
+        const from = location.state?.from
+        navigate(from && isH5Path(from) ? from : getMobileHomePath(data.permissions || {}, data.user))
+      } else {
+        navigate('/dashboard')
+      }
     } catch (e) {
       message.error(e.message || '登录失败')
     } finally {
@@ -26,16 +35,12 @@ export default function Login() {
     }
   }
 
-  const quickLogin = (username) => {
-    onFinish({ username, password: '123456' })
-  }
-
   return (
-    <div className="login-page">
+    <div className={isMobileLogin ? 'mobile-login-page' : 'login-page'}>
       <Card className="login-card">
         <div className="login-logo">
-          <h1>{APP_NAME}</h1>
-          <p>客户管理 · 接单派单 · 财务核销</p>
+          <h1>{isMobileLogin ? APP_NAME_SHORT : APP_NAME}</h1>
+          <p>{isMobileLogin ? '移动版 · 工单 · 客户 · 跟进' : '客户管理 · 接单派单 · 财务核销'}</p>
         </div>
         <Form onFinish={onFinish} size="large" initialValues={{ username: 'zhangsan', password: '123456' }}>
           <Form.Item name="username" rules={[{ required: true, message: '请输入用户名' }]}>
@@ -50,15 +55,12 @@ export default function Login() {
             </Button>
           </Form.Item>
         </Form>
-        <div style={{ borderTop: '1px solid #f0f0f0', paddingTop: 16 }}>
-          <p style={{ color: '#999', fontSize: 12, marginBottom: 8 }}>快捷登录（密码均为 123456）：</p>
-          <Select style={{ width: '100%' }} placeholder="选择角色快速登录" onChange={quickLogin}
-            options={[
-              { value: 'admin', label: '① 管理员 admin — 派工/权限/全部' },
-              { value: 'zhangsan', label: '② 销售 zhangsan — 公海/接单/客户' },
-              { value: 'zhaoyun', label: '③ 安装 zhaoyun — 安装登记' },
-              { value: 'finance', label: '④ 财务 finance — 回款/报表' },
-            ]} />
+        <div className="mobile-login-link">
+          {isMobileLogin ? (
+            <Link to="/login">使用电脑版登录</Link>
+          ) : (
+            <Link to={h5Path('login')}>移动端入口 →</Link>
+          )}
         </div>
       </Card>
     </div>

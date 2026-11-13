@@ -1,16 +1,27 @@
 import { useEffect, useState } from 'react'
-import { Table, Input, Button, Space, Tag, message, Popconfirm, Upload, Modal, Form } from 'antd'
+import { Table, Input, Button, Tag, message, Popconfirm, Upload, Modal, Form } from 'antd'
 import { UserAddOutlined, UploadOutlined, PlusOutlined, DownloadOutlined } from '@ant-design/icons'
 import { getPublicPool, claimCustomer, importPublicPool, createPublicPoolCustomer } from '../api'
+import { downloadCsvTemplate, parseImportFile, IMPORT_ACCEPT } from '../utils/csvImport'
 import { Permission } from '../components/RequireAuth'
+import ExportButton from '../components/ExportButton'
 import { ListToolbar, FilterInput, QueryButton, ResetButton } from '../components/ListToolbar'
 import { openCreateForm, closeFormModal } from '../utils/formModal'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const PHONE_RULE = [{ pattern: /^1\d{10}$/, message: '请输入11位手机号' }]
+const POOL_TEMPLATE = {
+  filename: '公海客户导入模板.csv',
+  headers: ['店名', '客户名称', '联系人', '手机号', '地址'],
+  keys: ['storeName', 'customerName', 'contact', 'phone', 'address'],
+  sample: ['示例门店', '示例客户', '张经理', '13800138000', '示例地址'],
+  required: ['storeName', 'customerName'],
+}
 
 export default function PublicPoolList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const { pagination } = useTablePagination(10, data.length)
   const [keyword, setKeyword] = useState('')
   const [modalOpen, setModalOpen] = useState(false)
   const [form] = Form.useForm()
@@ -38,10 +49,16 @@ export default function PublicPoolList() {
     load()
   }
 
-  const handleImport = async () => {
-    const res = await importPublicPool()
-    message.success(`成功导入 ${res.count} 条客户`)
-    load()
+  const handleImport = async (file) => {
+    try {
+      const rows = await parseImportFile(file, POOL_TEMPLATE)
+      const res = await importPublicPool(rows)
+      message.success(`成功导入 ${res.count} 条客户`)
+      load()
+    } catch (e) {
+      message.error(e.message || '导入失败')
+    }
+    return false
   }
 
   const handleCreate = async () => {
@@ -57,15 +74,6 @@ export default function PublicPoolList() {
     setModalOpen(true)
   }
 
-  const downloadTemplate = () => {
-    const header = '店名,客户名称,联系人,手机号,地址\n'
-    const blob = new Blob([header + '示例门店,示例客户,张经理,13800138000,示例地址'], { type: 'text/csv;charset=utf-8' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = '公海客户导入模板.csv'
-    a.click()
-  }
-
   const columns = [
     { title: '店名', dataIndex: 'storeName', width: 140 },
     { title: '客户名称', dataIndex: 'customerName', width: 180 },
@@ -77,7 +85,7 @@ export default function PublicPoolList() {
     {
       title: '操作', width: 100,
       render: (_, r) => (
-        <Permission code="customer:claim">
+        <Permission code="public-pool:claim">
           <Popconfirm title="确认领取该客户？" onConfirm={() => handleClaim(r.id)}>
             <Button type="link" size="small" icon={<UserAddOutlined />}>领取</Button>
           </Popconfirm>
@@ -102,19 +110,22 @@ export default function PublicPoolList() {
         )}
         actions={(
           <>
-            <Permission code="customer:create">
+            <Permission code="public-pool:create">
               <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增客户</Button>
             </Permission>
-            <Permission code="customer:import">
-              <Button icon={<DownloadOutlined />} onClick={downloadTemplate}>下载模板</Button>
-              <Upload showUploadList={false} beforeUpload={() => { handleImport(); return false }}>
+            <Permission code="public-pool:import">
+              <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(POOL_TEMPLATE)}>下载模板</Button>
+              <Upload showUploadList={false} accept={IMPORT_ACCEPT} beforeUpload={handleImport}>
                 <Button icon={<UploadOutlined />}>导入 Excel</Button>
               </Upload>
+            </Permission>
+            <Permission code="public-pool:export">
+              <ExportButton filename="public-pool.csv" label="导出" data={data} columns={columns} />
             </Permission>
           </>
         )}
       />
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={{ pageSize: 10 }} />
+      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} pagination={pagination} />
 
       <Modal title="新增公海客户" open={modalOpen} onOk={handleCreate} onCancel={() => closeFormModal(form, setModalOpen)} destroyOnClose>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }} preserve={false}>

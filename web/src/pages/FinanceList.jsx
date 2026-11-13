@@ -1,15 +1,50 @@
 import { useEffect, useState } from 'react'
-import { Table, Select, Button, Space, Progress, Tag, Modal, Form, Input, InputNumber, Descriptions, message, Timeline, Upload } from 'antd'
-import { PlusOutlined, UploadOutlined, DownloadOutlined } from '@ant-design/icons'
-import { getFinanceList, createFinance, importFinance, recordPayment, sendBill, getPaymentRecords } from '../api'
+import { Table, Select, Button, Space, Progress, Tag, Modal, Form, Input, InputNumber, Descriptions, message, Timeline, Upload, Image, DatePicker } from 'antd'
+import { PlusOutlined, UploadOutlined, DownloadOutlined, EditOutlined } from '@ant-design/icons'
+import dayjs from 'dayjs'
+import { getFinanceList, createFinance, updateFinance, importFinance, recordPayment, sendBill, getPaymentRecords } from '../api'
+import { fileUrl } from '../api/upload'
 import { PaymentStatusTag } from '../components/StatusTag'
 import { formatMoney } from '../utils/helpers'
 import ExportButton from '../components/ExportButton'
 import PaymentModal from '../components/PaymentModal'
 import { Permission } from '../components/RequireAuth'
 import { openCreateForm, closeFormModal } from '../utils/formModal'
-import { downloadCsvTemplate, parseCsvFile } from '../utils/csvImport'
-import { ListToolbar, QueryButton, ResetButton, FilterSelect } from '../components/ListToolbar'
+import { downloadCsvTemplate, parseImportFile, IMPORT_ACCEPT } from '../utils/csvImport'
+import { FilterInput, FilterField, FilterSelect, QueryButton, ResetButton, applyFilterPatch } from '../components/ListToolbar'
+import FormColumnLayout, { modalFormWidth } from '../components/FormColumnLayout'
+import ChangeLogButton from '../components/ChangeLogButton'
+import { useTablePagination } from '../hooks/useTablePagination'
+import { canFilterBySales } from '../rbac/utils'
+
+const EMPTY_FILTERS = {
+  keyword: '',
+  paymentStatus: '',
+  invoiceStatus: '',
+  contractStatus: '',
+  salesName: '',
+  billMonth: null,
+  contactStatus: '',
+  assetHealth: '',
+}
+
+const PAYMENT_STATUSES = ['已回款', '部分回款', '已逾期', '未回款']
+const CONTRACT_STATUSES = ['正常', '30天后到期', '10天后到期', '3天后到期', '已逾期']
+const CONTACT_STATUSES = ['正常', '中断合作', '待跟进']
+const ASSET_HEALTH = ['正常', '离线预警']
+
+function buildQueryParams(query) {
+  const params = {}
+  Object.entries(query).forEach(([key, value]) => {
+    if (!value) return
+    if (key === 'billMonth') {
+      params.billMonth = dayjs.isDayjs(value) ? value.format('YYYY-MM') : value
+      return
+    }
+    params[key] = value
+  })
+  return params
+}
 
 const FINANCE_TEMPLATE = {
   filename: '财务账单导入模板.csv',
@@ -24,40 +59,41 @@ const INVOICE_STATUSES = ['增值税专用发票', '增值税普通发票', '不
 export default function FinanceList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
-  const [statusFilter, setStatusFilter] = useState('')
+  const { pagination } = useTablePagination(10, data.length)
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+  const [query, setQuery] = useState({ ...EMPTY_FILTERS })
   const [detailModal, setDetailModal] = useState(false)
   const [payModal, setPayModal] = useState(false)
   const [billModal, setBillModal] = useState(false)
   const [createModal, setCreateModal] = useState(false)
+  const [editing, setEditing] = useState(null)
   const [current, setCurrent] = useState(null)
   const [paymentRecords, setPaymentRecords] = useState([])
   const [billForm] = Form.useForm()
   const [form] = Form.useForm()
+  const filterBySales = canFilterBySales()
 
-  const load = async (status = statusFilter) => {
+  const load = async (params = query) => {
     setLoading(true)
     try {
-      const params = {}
-      if (status) params.paymentStatus = status
-      const res = await getFinanceList(params)
+      const res = await getFinanceList(buildQueryParams(params))
       setData(res.list)
     } finally {
       setLoading(false)
     }
   }
 
-  const onStatusChange = (v) => {
-    const status = v || ''
-    setStatusFilter(status)
-    load(status)
-  }
+  useEffect(() => { load() }, [query])
+
+  const handleSearch = () => setQuery({ ...filters })
 
   const handleReset = () => {
-    setStatusFilter('')
-    load('')
+    setFilters({ ...EMPTY_FILTERS })
+    setQuery({ ...EMPTY_FILTERS })
   }
 
-  useEffect(() => { load() }, [])
+  const setFilter = (key, value) => setFilters((prev) => ({ ...prev, [key]: value }))
+  const onSelectFilter = (key) => (v) => applyFilterPatch({ [key]: v || '' }, setFilters, setQuery)
 
   const openDetail = async (record) => {
     setCurrent(record)
@@ -80,7 +116,26 @@ export default function FinanceList() {
     setBillModal(false)
   }
 
+  const openEdit = (record) => {
+    setEditing(record)
+    form.setFieldsValue({
+      storeName: record.storeName,
+      customerName: record.customerName,
+      orderNo: record.orderNo,
+      package: record.package,
+      billMonth: record.billMonth,
+      contractPeriod: record.contractPeriod,
+      totalAmount: record.totalAmount,
+      paidAmount: record.paidAmount,
+      paymentPlanDate: record.paymentPlanDate,
+      salesName: record.salesName,
+      invoiceStatus: record.invoiceStatus,
+    })
+    setCreateModal(true)
+  }
+
   const openCreate = () => {
+    setEditing(null)
     openCreateForm(form, {
       storeName: '', customerName: '', orderNo: '', package: '',
       billMonth: new Date().toISOString().slice(0, 7),
@@ -92,16 +147,21 @@ export default function FinanceList() {
 
   const handleCreate = async () => {
     const values = await form.validateFields()
-    await createFinance(values)
-    message.success('账单已新增')
+    if (editing) {
+      await updateFinance({ id: editing.id, ...values })
+      message.success('账单已更新')
+    } else {
+      await createFinance(values)
+      message.success('账单已新增')
+    }
+    setEditing(null)
     closeFormModal(form, setCreateModal)
     load()
   }
 
   const handleImport = async (file) => {
     try {
-      const text = await file.text()
-      const rows = parseCsvFile(text, FINANCE_TEMPLATE).map((row) => ({
+      const rows = (await parseImportFile(file, FINANCE_TEMPLATE)).map((row) => ({
         ...row,
         totalAmount: Number(row.totalAmount) || 0,
         paidAmount: Number(row.paidAmount) || 0,
@@ -116,29 +176,40 @@ export default function FinanceList() {
   }
 
   const invoiceColor = { '已开票': 'success', '待开票': 'warning', '不开票': 'default' }
-  const contractColor = { '正常': 'success', '即将到期': 'warning' }
+  const contractColor = { 正常: 'success', 一个月到期: 'gold', '30天后到期': 'gold', '10天到期': 'orange', '10天后到期': 'orange', 三天到期: 'red', '3天后到期': 'red', 已到期: 'error', 已逾期: 'error', 即将到期: 'warning' }
+
+  const text = (v) => v || '-'
 
   const columns = [
-    { title: '客户门店', dataIndex: 'storeName', width: 120, fixed: 'left' },
-    { title: '客户名称', dataIndex: 'customerName', width: 160 },
-    { title: '工单号', dataIndex: 'orderNo', width: 160 },
-    { title: '合作套餐', dataIndex: 'package', width: 160 },
-    { title: '账单月份', dataIndex: 'billMonth', width: 90 },
-    { title: '合同周期', dataIndex: 'contractPeriod', width: 180 },
-    { title: '合同状态', dataIndex: 'contractStatus', width: 100, render: (s) => <Tag color={contractColor[s]}>{s === '即将到期' ? '⚠️即将到期' : s}</Tag> },
-    { title: '应收总额', dataIndex: 'totalAmount', width: 100, render: formatMoney },
-    { title: '已收金额', dataIndex: 'paidAmount', width: 100, render: formatMoney },
-    { title: '未收余额', dataIndex: 'unpaidAmount', width: 100, render: (v) => <span style={{ color: v > 0 ? '#ff4d4f' : '#52c41a' }}>{formatMoney(v)}</span> },
+    { title: '店名', dataIndex: 'storeName', width: 130, fixed: 'left' },
+    { title: '公司名称', dataIndex: 'customerName', width: 160 },
+    { title: '联系人', dataIndex: 'contact', width: 90, render: text },
+    { title: '手机号', dataIndex: 'phone', width: 120, render: text },
+    { title: '工单号', dataIndex: 'orderNo', width: 140 },
+    { title: '合同周期', dataIndex: 'contractPeriod', width: 180, render: text },
+    { title: '账单月', dataIndex: 'billMonth', width: 90, render: text },
+    { title: '售价', dataIndex: 'price', width: 80, render: text },
     { title: '回款状态', dataIndex: 'paymentStatus', width: 90, render: (s) => <PaymentStatusTag status={s} /> },
-    { title: '回款进度', dataIndex: 'paymentProgress', width: 120, render: (v) => <Progress percent={v} size="small" /> },
-    { title: '开票状态', dataIndex: 'invoiceStatus', width: 90, render: (s) => <Tag color={invoiceColor[s]}>{s}</Tag> },
-    { title: '经办销售', dataIndex: 'salesName', width: 80 },
-    { title: '回款计划日', dataIndex: 'paymentPlanDate', width: 110 },
+    { title: '开票', dataIndex: 'invoiceStatus', width: 110, render: (s) => s ? <Tag color={invoiceColor[s]}>{s}</Tag> : '-' },
+    { title: '合同状态', dataIndex: 'contractStatus', width: 120, render: (s) => <Tag color={contractColor[s]}>{s || '-'}</Tag> },
+    { title: '联系状态', dataIndex: 'contactStatus', width: 90, render: (s) => <Tag color={s === '正常' ? 'success' : 'error'}>{s || '-'}</Tag> },
+    { title: '资产健康', dataIndex: 'assetHealth', width: 90, render: (s) => <Tag color={s === '离线预警' ? 'error' : 'success'}>{s || '-'}</Tag> },
+    { title: '应收', dataIndex: 'totalAmount', width: 90, render: formatMoney },
+    { title: '已收', dataIndex: 'paidAmount', width: 90, render: formatMoney },
+    { title: '未收', dataIndex: 'unpaidAmount', width: 90, render: (v) => <span style={{ color: v > 0 ? '#ff4d4f' : '#52c41a' }}>{formatMoney(v)}</span> },
+    { title: '计划日', dataIndex: 'paymentPlanDate', width: 110, render: text },
+    { title: '进度', dataIndex: 'paymentProgress', width: 100, render: (v) => <Progress percent={v || 0} size="small" /> },
+    { title: '经办销售', dataIndex: 'salesName', width: 90 },
+    { title: '合作套餐', dataIndex: 'package', width: 140, render: text },
     {
-      title: '操作', width: 220, fixed: 'right',
+      title: '操作', width: 300, fixed: 'right',
       render: (_, r) => (
-        <Space size="small">
+        <Space size="small" wrap>
           <Button type="link" size="small" onClick={() => openDetail(r)}>查看</Button>
+          <Permission code="finance:edit">
+            <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(r)}>编辑</Button>
+          </Permission>
+          <ChangeLogButton module="财务" targetId={r.id} />
           <Permission code="finance:payment">
             <Button type="link" size="small" onClick={() => { setCurrent(r); setPayModal(true) }}>录入</Button>
           </Permission>
@@ -156,36 +227,89 @@ export default function FinanceList() {
         <h2>财务板块</h2>
         <p>应收/已收/未收管理、回款录入与核销</p>
       </div>
-      <ListToolbar
-        filters={(
-          <>
-            <FilterSelect placeholder="回款状态" value={statusFilter || undefined} onChange={onStatusChange}
-              options={['已回款', '部分回款', '已逾期', '未回款'].map((s) => ({ value: s, label: s }))} />
-            <QueryButton loading={loading} onClick={() => load()} />
+      <div className="order-query-bar finance-query-bar">
+        <div className="order-query-bar__row">
+          <FilterInput
+            placeholder="客户/店名/工单号/联系人/手机号/套餐"
+            value={filters.keyword}
+            onChange={(e) => setFilter('keyword', e.target.value)}
+            onPressEnter={handleSearch}
+          />
+          <FilterSelect
+            placeholder="回款状态"
+            value={filters.paymentStatus || undefined}
+            onChange={onSelectFilter('paymentStatus')}
+            options={PAYMENT_STATUSES.map((s) => ({ value: s, label: s }))}
+          />
+          <FilterSelect
+            className="finance-filter-invoice"
+            placeholder="开票状态"
+            value={filters.invoiceStatus || undefined}
+            onChange={onSelectFilter('invoiceStatus')}
+            options={INVOICE_STATUSES.map((s) => ({ value: s, label: s }))}
+          />
+          <FilterSelect
+            wide
+            placeholder="合同状态"
+            value={filters.contractStatus || undefined}
+            onChange={onSelectFilter('contractStatus')}
+            options={CONTRACT_STATUSES.map((s) => ({ value: s, label: s }))}
+          />
+          <div className="order-query-bar__actions">
+            <QueryButton loading={loading} onClick={handleSearch} />
             <ResetButton onClick={handleReset} />
-          </>
-        )}
-        actions={(
-          <Space>
+          </div>
+        </div>
+        <div className="order-query-bar__row">
+          {filterBySales && (
+            <FilterField
+              placeholder="负责销售"
+              value={filters.salesName}
+              onChange={(e) => setFilter('salesName', e.target.value)}
+              onPressEnter={handleSearch}
+            />
+          )}
+          <DatePicker
+            picker="month"
+            className="finance-filter-month"
+            placeholder="账单月份"
+            value={filters.billMonth}
+            onChange={(v) => applyFilterPatch({ billMonth: v }, setFilters, setQuery)}
+            allowClear
+          />
+          <FilterSelect
+            placeholder="联系状态"
+            value={filters.contactStatus || undefined}
+            onChange={onSelectFilter('contactStatus')}
+            options={CONTACT_STATUSES.map((s) => ({ value: s, label: s }))}
+          />
+          <FilterSelect
+            placeholder="资产健康"
+            value={filters.assetHealth || undefined}
+            onChange={onSelectFilter('assetHealth')}
+            options={ASSET_HEALTH.map((s) => ({ value: s, label: s }))}
+          />
+          <div className="order-query-bar__actions">
             <Permission code="finance:create">
               <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新增账单</Button>
             </Permission>
             <Permission code="finance:import">
               <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(FINANCE_TEMPLATE)}>下载模板</Button>
-              <Upload accept=".csv" showUploadList={false} beforeUpload={handleImport}>
+              <Upload accept={IMPORT_ACCEPT} showUploadList={false} beforeUpload={handleImport}>
                 <Button icon={<UploadOutlined />}>批量导入</Button>
               </Upload>
             </Permission>
             <Permission code="finance:export">
-              <ExportButton filename="finance.csv" label="导出账单" />
+              <ExportButton filename="finance.csv" label="导出账单" data={data} columns={columns} />
             </Permission>
-          </Space>
-        )}
-      />
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 2200 }} pagination={{ pageSize: 10 }} />
+          </div>
+        </div>
+      </div>
+      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 2800 }} pagination={{ ...pagination, showTotal: (t) => `共 ${t} 条` }} />
 
-      <Modal title="新增财务账单" open={createModal} onOk={handleCreate} onCancel={() => closeFormModal(form, setCreateModal)} width={640} destroyOnClose>
+      <Modal title={editing ? '编辑财务账单' : '新增财务账单'} open={createModal} onOk={handleCreate} onCancel={() => { setEditing(null); closeFormModal(form, setCreateModal) }} width={modalFormWidth(11)} destroyOnClose>
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <FormColumnLayout>
           <Form.Item name="storeName" label="客户门店" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="customerName" label="客户名称" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="orderNo" label="工单号" rules={[{ required: true }]}><Input placeholder="GD-20261025-088" /></Form.Item>
@@ -199,6 +323,7 @@ export default function FinanceList() {
           <Form.Item name="invoiceStatus" label="开票状态">
             <Select options={INVOICE_STATUSES.map((s) => ({ value: s, label: s }))} />
           </Form.Item>
+          </FormColumnLayout>
         </Form>
       </Modal>
 
@@ -206,15 +331,24 @@ export default function FinanceList() {
         {current && (
           <>
             <Descriptions column={2} bordered size="small" style={{ marginTop: 16 }}>
-              <Descriptions.Item label="客户">{current.customerName}</Descriptions.Item>
-              <Descriptions.Item label="门店">{current.storeName}</Descriptions.Item>
+              <Descriptions.Item label="公司名称">{current.customerName}</Descriptions.Item>
+              <Descriptions.Item label="店名">{current.storeName}</Descriptions.Item>
+              <Descriptions.Item label="联系人">{current.contact || '-'}</Descriptions.Item>
+              <Descriptions.Item label="手机号">{current.phone || '-'}</Descriptions.Item>
               <Descriptions.Item label="工单号">{current.orderNo}</Descriptions.Item>
+              <Descriptions.Item label="售价">{current.price || '-'}</Descriptions.Item>
+              <Descriptions.Item label="联系状态">{current.contactStatus || '-'}</Descriptions.Item>
+              <Descriptions.Item label="资产健康">{current.assetHealth || '-'}</Descriptions.Item>
               <Descriptions.Item label="套餐">{current.package}</Descriptions.Item>
               <Descriptions.Item label="账单月份">{current.billMonth}</Descriptions.Item>
               <Descriptions.Item label="经办销售">{current.salesName}</Descriptions.Item>
               <Descriptions.Item label="合同周期" span={2}>{current.contractPeriod}</Descriptions.Item>
               <Descriptions.Item label="应收">{formatMoney(current.totalAmount)}</Descriptions.Item>
               <Descriptions.Item label="已收">{formatMoney(current.paidAmount)}</Descriptions.Item>
+              <Descriptions.Item label="未收">{formatMoney(current.unpaidAmount)}</Descriptions.Item>
+              <Descriptions.Item label="计划日">{current.paymentPlanDate || '-'}</Descriptions.Item>
+              <Descriptions.Item label="进度">{current.paymentProgress || 0}%</Descriptions.Item>
+              <Descriptions.Item label="合同状态">{current.contractStatus || '-'}</Descriptions.Item>
               <Descriptions.Item label="回款状态"><PaymentStatusTag status={current.paymentStatus} /></Descriptions.Item>
               <Descriptions.Item label="开票">{current.invoiceStatus}</Descriptions.Item>
               <Descriptions.Item label="最近回款">{current.lastPaymentTime || '-'}</Descriptions.Item>
@@ -223,7 +357,16 @@ export default function FinanceList() {
               <>
                 <h4 style={{ marginTop: 20 }}>回款记录</h4>
                 <Timeline items={paymentRecords.map((p) => ({
-                  children: `${p.time} · ¥${p.amount} · ${p.voucher || '无凭证'} · ${p.verified ? '已核销' : '待核销'}`,
+                  children: (
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      <span>{p.time} · ¥{p.amount} · {p.verified ? '已核销' : '待核销'}</span>
+                      {p.voucher ? (
+                        /\.pdf$/i.test(p.voucher)
+                          ? <a href={fileUrl(p.voucher)} target="_blank" rel="noreferrer">查看凭证</a>
+                          : <Image width={40} src={fileUrl(p.voucher)} />
+                      ) : <span>无凭证</span>}
+                    </span>
+                  ),
                 }))} />
               </>
             )}

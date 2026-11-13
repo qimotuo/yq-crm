@@ -1,17 +1,44 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Table, Tabs, Button, Modal, Form, Input, Select, DatePicker, Card, Statistic, Row, Col, Popconfirm, message } from 'antd'
-import { PlusOutlined, DeleteOutlined } from '@ant-design/icons'
+import { Table, Tabs, Button, Modal, Form, Input, Select, DatePicker, Card, Statistic, Row, Col, Popconfirm, message, Upload } from 'antd'
+import { PlusOutlined, DeleteOutlined, DownloadOutlined, UploadOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
-import { getAdminLedger, createAdminLedger, deleteAdminLedger } from '../api'
+import { getAdminLedger, createAdminLedger, deleteAdminLedger, importAdminLedger } from '../api'
+import { downloadCsvTemplate, parseImportFile, IMPORT_ACCEPT } from '../utils/csvImport'
+import ExportButton from '../components/ExportButton'
 import { Permission } from '../components/RequireAuth'
+import { ListToolbar, FilterInput, FilterField, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
 import { formatMoney } from '../utils/helpers'
 import { useAuth } from '../hooks/useAuth'
 import { ADMIN_CATEGORIES } from '../constants/ledger'
+import { useTablePagination } from '../hooks/useTablePagination'
+
+const EMPTY_FILTERS = { keyword: '', createdBy: '', amountMin: '', amountMax: '' }
+const ADMIN_LEDGER_TEMPLATE = {
+  filename: '行政账本导入模板.csv',
+  headers: ['账单类型', '金额', '日期', '用途备注'],
+  keys: ['category', 'amount', 'entryDate', 'remark'],
+  sample: ['日常账单', '100', '2026-11-01', '办公用品'],
+  required: ['category', 'amount', 'entryDate', 'remark'],
+}
+
+function matchAmountRange(amount, min, max) {
+  if (min !== '' && min != null) {
+    const n = Number(min)
+    if (!Number.isNaN(n) && amount < n) return false
+  }
+  if (max !== '' && max != null) {
+    const n = Number(max)
+    if (!Number.isNaN(n) && amount > n) return false
+  }
+  return true
+}
 
 export default function AdminLedger() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [category, setCategory] = useState('日常账单')
+  const [filters, setFilters] = useState({ ...EMPTY_FILTERS })
+  const [query, setQuery] = useState({ ...EMPTY_FILTERS })
   const [month, setMonth] = useState(dayjs())
   const [modalOpen, setModalOpen] = useState(false)
   const [form] = Form.useForm()
@@ -30,7 +57,34 @@ export default function AdminLedger() {
 
   useEffect(() => { load() }, [monthStr])
 
-  const filtered = useMemo(() => data.filter((r) => r.category === category), [data, category])
+  useEffect(() => {
+    setFilters({ ...EMPTY_FILTERS })
+    setQuery({ ...EMPTY_FILTERS })
+  }, [category])
+
+  const categoryData = useMemo(() => data.filter((r) => r.category === category), [data, category])
+
+  const createdByOptions = useMemo(
+    () => [...new Set(categoryData.map((r) => r.createdBy).filter(Boolean))].map((v) => ({ value: v, label: v })),
+    [categoryData],
+  )
+
+  const filtered = useMemo(() => categoryData.filter((r) => {
+    if (query.createdBy && r.createdBy !== query.createdBy) return false
+    if (!matchAmountRange(r.amount, query.amountMin, query.amountMax)) return false
+    if (query.keyword) {
+      const kw = query.keyword.trim().toLowerCase()
+      if (!(r.remark || '').toLowerCase().includes(kw)) return false
+    }
+    return true
+  }), [categoryData, query])
+  const { pagination } = useTablePagination(20, filtered.length)
+
+  const handleSearch = () => setQuery({ ...filters })
+  const handleReset = () => {
+    setFilters({ ...EMPTY_FILTERS })
+    setQuery({ ...EMPTY_FILTERS })
+  }
 
   const summary = useMemo(() => {
     const daily = data.filter((r) => r.category === '日常账单').reduce((s, r) => s + r.amount, 0)
@@ -61,6 +115,18 @@ export default function AdminLedger() {
     await deleteAdminLedger(id)
     message.success('已删除')
     load()
+  }
+
+  const handleImport = async (file) => {
+    try {
+      const rows = await parseImportFile(file, ADMIN_LEDGER_TEMPLATE)
+      const res = await importAdminLedger(rows)
+      message.success(`成功导入 ${res.count} 条`)
+      load()
+    } catch (e) {
+      message.error(e.message || '导入失败')
+    }
+    return false
   }
 
   const columns = [
@@ -94,19 +160,74 @@ export default function AdminLedger() {
         <Col span={8}><Card size="small"><Statistic title="本月合计" value={summary.total} precision={2} prefix="¥" /></Card></Col>
       </Row>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
-        <Tabs
-          activeKey={category}
-          onChange={setCategory}
-          size="small"
-          items={ADMIN_CATEGORIES.map((c) => ({ key: c, label: c }))}
-        />
-        <Permission code="admin-ledger:create">
-          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>记一笔</Button>
-        </Permission>
-      </div>
+      <ListToolbar
+        filters={(
+          <Tabs
+            activeKey={category}
+            onChange={setCategory}
+            size="small"
+            className="toolbar-tabs"
+            items={ADMIN_CATEGORIES.map((c) => ({ key: c, label: c }))}
+          />
+        )}
+        actions={(
+          <>
+            <Permission code="admin-ledger:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>记一笔</Button>
+            </Permission>
+            <Permission code="admin-ledger:import">
+              <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(ADMIN_LEDGER_TEMPLATE)}>下载模板</Button>
+              <Upload showUploadList={false} accept={IMPORT_ACCEPT} beforeUpload={handleImport}>
+                <Button icon={<UploadOutlined />}>导入</Button>
+              </Upload>
+            </Permission>
+            <Permission code="admin-ledger:export">
+              <ExportButton filename="admin-ledger.csv" label="导出" data={filtered} columns={columns} />
+            </Permission>
+          </>
+        )}
+      />
+      <ListToolbar
+        nested
+        filters={(
+          <>
+            <FilterInput
+              placeholder="搜索用途备注"
+              value={filters.keyword}
+              onChange={(e) => setFilters((f) => ({ ...f, keyword: e.target.value }))}
+              onPressEnter={handleSearch}
+            />
+            <FilterSelect
+              placeholder="录入人"
+              value={filters.createdBy || undefined}
+              onChange={(v) => setFilters((f) => ({ ...f, createdBy: v || '' }))}
+              options={createdByOptions}
+            />
+            <FilterField
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="最低金额"
+              value={filters.amountMin}
+              onChange={(e) => setFilters((f) => ({ ...f, amountMin: e.target.value }))}
+              onPressEnter={handleSearch}
+            />
+            <FilterField
+              type="number"
+              min={0}
+              step={0.01}
+              placeholder="最高金额"
+              value={filters.amountMax}
+              onChange={(e) => setFilters((f) => ({ ...f, amountMax: e.target.value }))}
+              onPressEnter={handleSearch}
+            />
+            <QueryButton loading={loading} onClick={handleSearch} />
+            <ResetButton onClick={handleReset} />
+          </>
+        )}
+      />
 
-      <Table rowKey="id" loading={loading} dataSource={filtered} columns={columns} scroll={{ x: 640 }} pagination={{ pageSize: 20 }} />
+      <Table rowKey="id" loading={loading} dataSource={filtered} columns={columns} scroll={{ x: 640 }} pagination={{ ...pagination, showTotal: (t) => `共 ${t} 条` }} />
 
       <Modal title={`记一笔 · ${category}`} open={modalOpen} onOk={handleCreate} onCancel={() => setModalOpen(false)} destroyOnHidden>
         <Form form={form} layout="vertical">

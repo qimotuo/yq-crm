@@ -2,6 +2,9 @@ import { useEffect, useState } from 'react'
 import { Table, Tag } from 'antd'
 import { getOperationLogs } from '../api/notify'
 import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
+import ExportButton from '../components/ExportButton'
+import { Permission } from '../components/RequireAuth'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const actionColors = {
   login: 'green',
@@ -17,15 +20,15 @@ export default function OperationLogList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
   const [total, setTotal] = useState(0)
-  const [page, setPage] = useState(1)
+  const { pageSize, setCurrent, pagination, change } = useTablePagination(20, total)
   const [keyword, setKeyword] = useState('')
   const [action, setAction] = useState('')
   const [module, setModule] = useState('')
   const [query, setQuery] = useState({ keyword: '', action: '', module: '' })
 
-  const load = (p = page, q = query) => {
+  const load = (p = 1, q = query, s = pageSize) => {
     setLoading(true)
-    const params = { page: p, size: 20 }
+    const params = { page: p, size: s }
     if (q.keyword) params.keyword = q.keyword
     if (q.action) params.action = q.action
     if (q.module) params.module = q.module
@@ -33,13 +36,14 @@ export default function OperationLogList() {
       .then((res) => {
         setData(res.list)
         setTotal(res.total)
-        setPage(res.page)
+        setCurrent(res.page)
       })
       .finally(() => setLoading(false))
   }
 
   const searchWith = (next) => {
     setQuery(next)
+    setCurrent(1)
     load(1, next)
   }
 
@@ -59,6 +63,7 @@ export default function OperationLogList() {
     setModule('')
     const empty = { keyword: '', action: '', module: '' }
     setQuery(empty)
+    setCurrent(1)
     load(1, empty)
   }
 
@@ -75,6 +80,14 @@ export default function OperationLogList() {
     },
     { title: '模块', dataIndex: 'module', width: 80 },
     { title: '详情', dataIndex: 'detail', ellipsis: true },
+    {
+      title: '修改内容',
+      width: 280,
+      ellipsis: true,
+      render: (_, r) => (r.changes || []).length
+        ? (r.changes || []).map((item) => `${item.label}：${item.before || '空'} → ${item.after || '空'}`).join('；')
+        : '-',
+    },
     { title: 'IP', dataIndex: 'ip', width: 120 },
     { title: '接口', dataIndex: 'path', width: 180, ellipsis: true },
   ]
@@ -108,11 +121,16 @@ export default function OperationLogList() {
               placeholder="模块"
               value={module || undefined}
               onChange={onSelectFilter('module')}
-              options={['系统', '工单', '日程'].map((v) => ({ value: v, label: v }))}
+              options={['系统', '客户', '工单', '财务', '合同', '关联', '日程'].map((v) => ({ value: v, label: v }))}
             />
             <QueryButton loading={loading} onClick={handleSearch} />
             <ResetButton onClick={handleReset} />
           </>
+        )}
+        actions={(
+          <Permission code="system:log:export">
+            <ExportButton filename="operation-logs.csv" label="导出" data={data} columns={columns} />
+          </Permission>
         )}
       />
 
@@ -122,11 +140,13 @@ export default function OperationLogList() {
         columns={columns}
         dataSource={data}
         pagination={{
-          current: page,
+          ...pagination,
           total,
-          pageSize: 20,
-          onChange: (p) => load(p),
           showTotal: (t) => `共 ${t} 条`,
+          onChange: (p, s) => {
+            const next = change(p, s)
+            load(next.page, query, next.pageSize)
+          },
         }}
       />
     </div>

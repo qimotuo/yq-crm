@@ -8,6 +8,8 @@ import {
   getNotifyTemplates, getNotifySendRecords, sendAdminNotification,
 } from '../api/notify'
 import { Permission } from '../components/RequireAuth'
+import FormColumnLayout from '../components/FormColumnLayout'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const TARGET_LABELS = { all: '全部用户', roles: '按角色', users: '指定用户' }
 const CHANNEL_LABELS = { site: '站内通知', miniprogram: '小程序订阅' }
@@ -19,16 +21,16 @@ export default function NotificationManage() {
   const [users, setUsers] = useState([])
   const [records, setRecords] = useState([])
   const [recordTotal, setRecordTotal] = useState(0)
-  const [recordPage, setRecordPage] = useState(1)
+  const { pageSize, setCurrent, pagination, change } = useTablePagination(10, recordTotal)
   const [templates, setTemplates] = useState({ site: [], miniprogram: [] })
   const [targetType, setTargetType] = useState('roles')
   const targetTypeWatch = Form.useWatch('targetType', form)
 
-  const loadRecords = (p = 1) => {
-    getNotifySendRecords({ page: p, size: 10 }).then((res) => {
+  const loadRecords = (p = 1, s = pageSize) => {
+    getNotifySendRecords({ page: p, size: s }).then((res) => {
       setRecords(res.list)
       setRecordTotal(res.total)
-      setRecordPage(res.page)
+      setCurrent(res.page)
     })
   }
 
@@ -54,6 +56,7 @@ export default function NotificationManage() {
       const res = await sendAdminNotification(values)
       message.success(`已发送给 ${res.recipientCount} 位用户`)
       form.setFieldsValue({ title: '', content: '', path: '', roleCodes: undefined, userIds: undefined })
+      setCurrent(1)
       loadRecords(1)
     } finally {
       setSending(false)
@@ -111,6 +114,7 @@ export default function NotificationManage() {
         message="管理员可向全部用户、指定角色或指定用户发送提醒；小程序订阅消息渠道已预留，接入微信后可启用。"
       />
       <Form form={form} layout="vertical" onFinish={handleSend}>
+        <FormColumnLayout>
         <Form.Item label="选用模板（可选）">
           <Select
             allowClear
@@ -168,6 +172,7 @@ export default function NotificationManage() {
             </Checkbox>
           </Checkbox.Group>
         </Form.Item>
+        </FormColumnLayout>
         <Permission code="system:notify:send">
           <Button type="primary" htmlType="submit" icon={<SendOutlined />} loading={sending}>
             立即发送
@@ -199,7 +204,14 @@ export default function NotificationManage() {
                 rowKey="id"
                 columns={recordColumns}
                 dataSource={records}
-                pagination={{ current: recordPage, total: recordTotal, pageSize: 10, onChange: loadRecords }}
+                pagination={{
+                  ...pagination,
+                  total: recordTotal,
+                  onChange: (p, s) => {
+                    const next = change(p, s)
+                    loadRecords(next.page, next.pageSize)
+                  },
+                }}
               />
             ),
           },

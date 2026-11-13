@@ -1,20 +1,23 @@
 import { Navigate, Outlet } from 'react-router-dom'
-import { Layout, Menu, Dropdown, Avatar, Space, theme } from 'antd'
+import { Layout, Menu, Dropdown, Space, Spin, theme } from 'antd'
 import {
   DashboardOutlined, FileTextOutlined, SendOutlined, TeamOutlined, DollarOutlined,
   InboxOutlined, UserOutlined, LogoutOutlined, GlobalOutlined, FormOutlined,
   LinkOutlined, SearchOutlined, SettingOutlined, UserSwitchOutlined, CalendarOutlined,
-  ContactsOutlined,   SafetyOutlined, FileProtectOutlined, HistoryOutlined, DatabaseOutlined, FileSearchOutlined,
-  BellOutlined, AccountBookOutlined, AuditOutlined,
+  ContactsOutlined, SafetyOutlined, FileProtectOutlined, HistoryOutlined, DatabaseOutlined, FileSearchOutlined,
+  BellOutlined, AccountBookOutlined, AuditOutlined, RobotOutlined, PhoneOutlined,
 } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useSelector } from 'react-redux'
 import NotificationBell from '../components/NotificationBell'
 import PhoneBar from '../components/PhoneBar'
-import { useAuth } from '../hooks/useAuth'
+import AiAssistant from '../components/AiAssistant'
+import { AgentContextProvider } from '../context/AgentContext'
+import { useAuth, useSessionCheck } from '../hooks/useAuth'
 import { MENU_TREE, DEFAULT_ROLES } from '../rbac/config'
 import { filterMenuTree } from '../rbac/utils'
 import { selectIsAuthenticated, selectPermissions, selectUser } from '../store/authSlice'
+import { UserAvatar } from '../pages/Profile'
 import { APP_NAME } from '../constants/app'
 
 function checkPermission(permissions, code) {
@@ -26,6 +29,7 @@ const { Header, Sider, Content } = Layout
 
 const ICON_MAP = {
   '/dashboard': <DashboardOutlined />,
+  '/ai-agent': <RobotOutlined />,
   '/public-pool': <GlobalOutlined />,
   '/pool-config': <DatabaseOutlined />,
   '/my-customers': <UserSwitchOutlined />,
@@ -47,6 +51,9 @@ const ICON_MAP = {
   '/system/users': <SettingOutlined />,
   '/system/roles': <SafetyOutlined />,
   '/system/notifications': <BellOutlined />,
+  '/system/call-logs': <PhoneOutlined />,
+  '/system/cti-config': <PhoneOutlined />,
+  '/system/print-template': <FileTextOutlined />,
   '/system/logs': <FileSearchOutlined />,
 }
 
@@ -70,10 +77,18 @@ export default function MainLayout() {
   const user = useSelector(selectUser)
   const permissions = useSelector(selectPermissions)
   const isAuthenticated = useSelector(selectIsAuthenticated)
+  const sessionReady = useSessionCheck()
   const { logout } = useAuth()
   const roleName = DEFAULT_ROLES.find((r) => r.code === user.role)?.name || user.role
 
   if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (!sessionReady) {
+    return (
+      <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <Spin />
+      </div>
+    )
+  }
 
   const menuItems = toMenuItems(filterMenuTree(MENU_TREE, permissions.menuKeys))
   const openKeys = menuItems.filter((m) => m.children?.some((c) => c.key === location.pathname)).map((m) => m.key)
@@ -84,6 +99,7 @@ export default function MainLayout() {
   }
 
   return (
+    <AgentContextProvider>
     <Layout style={{ minHeight: '100vh' }}>
       <Sider breakpoint="lg" collapsedWidth={64} theme="dark" width={220}>
         <div style={{
@@ -105,8 +121,8 @@ export default function MainLayout() {
               { key: 'logout', icon: <LogoutOutlined />, label: '退出登录', onClick: handleLogout },
             ]}}>
               <Space style={{ cursor: 'pointer' }}>
-                <Avatar icon={<UserOutlined />} style={{ background: '#1677ff' }} />
-                <span>{user.name}（{roleName}）</span>
+                <UserAvatar src={user.avatar} size={32} />
+                <span>{user.nickname || user.name}（{roleName}）</span>
               </Space>
             </Dropdown>
           </Space>
@@ -117,7 +133,9 @@ export default function MainLayout() {
           </div>
         </Content>
       </Layout>
-      {checkPermission(permissions, 'customer:call') && <PhoneBar />}
+      {(checkPermission(permissions, 'my-customer:call') || checkPermission(permissions, 'contact:call')) && <PhoneBar />}
+      <AiAssistant />
     </Layout>
+    </AgentContextProvider>
   )
 }

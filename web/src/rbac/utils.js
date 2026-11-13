@@ -23,10 +23,20 @@ export function hasPermission(code) {
 }
 
 /** 检查菜单权限 */
+export function hasMenuAccess(permissions, path) {
+  if (!path) return false
+  if (permissions.menuKeys?.includes('*')) return true
+  return permissions.menuKeys?.includes(path) ?? false
+}
+
 export function hasMenu(path) {
-  const perms = getCurrentPermissions()
-  if (perms.menuKeys?.includes('*')) return true
-  return perms.menuKeys?.includes(path) ?? false
+  return hasMenuAccess(getCurrentPermissions(), path)
+}
+
+/** 按优先级返回当前用户可访问的第一个菜单路径 */
+export function resolveMenuPath(permissions, paths) {
+  const list = Array.isArray(paths) ? paths : [paths]
+  return list.find((p) => hasMenuAccess(permissions, p)) || null
 }
 
 /** 获取数据权限范围 */
@@ -37,6 +47,17 @@ export function getDataScope() {
 /** 是否仅本人数据 */
 export function isSelfDataOnly() {
   return getDataScope() === 'SELF'
+}
+
+/** 管理员，以及数据权限为全部的主管 */
+export function canManageCustomerOwner() {
+  const perms = getCurrentPermissions()
+  return perms.operations?.includes('*') || getDataScope() === 'ALL'
+}
+
+/** 主管/管理员可按销售筛选；销售本人不筛选他人 */
+export function canFilterBySales() {
+  return canManageCustomerOwner() || getDataScope() === 'DEPT'
 }
 
 /** 过滤菜单树 */

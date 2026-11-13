@@ -8,6 +8,7 @@ import 'dayjs/locale/zh-cn'
 import App from './App'
 import store from './store'
 import './index.css'
+import './styles/mobile.css'
 
 dayjs.locale('zh-cn')
 

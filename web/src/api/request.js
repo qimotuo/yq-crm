@@ -1,10 +1,28 @@
-const USE_MOCK = import.meta.env.VITE_USE_MOCK !== 'false'
+import store from '../store'
+import { logout } from '../store/authSlice'
+import { getAppBasename } from '../utils/basePath'
+
 const BASE_URL = import.meta.env.VITE_API_BASE || '/api'
 
-const mockHandlers = {}
+let redirectingLogin = false
 
-export function registerMock(method, url, handler) {
-  mockHandlers[`${method} ${url}`] = handler
+function loginUrl() {
+  const base = getAppBasename()
+  if (base === '/h5') return '/h5/login'
+  if (base === '/crm') return '/crm/login'
+  if (window.location.pathname.startsWith('/h5')) return '/h5/login'
+  return '/login'
+}
+
+function expireSession(message) {
+  store.dispatch(logout())
+  const err = new Error(message || '登录已过期，请重新登录')
+  err.status = 401
+  if (!redirectingLogin && !window.location.pathname.endsWith('/login')) {
+    redirectingLogin = true
+    window.location.replace(loginUrl())
+  }
+  return err
 }
 
 function parseQuery(url) {
@@ -23,22 +41,6 @@ function getPath(url) {
 }
 
 export async function request(url, options = {}) {
-  const method = options.method || 'GET'
-  const path = getPath(url)
-  const queryParams = parseQuery(url)
-
-  if (USE_MOCK) {
-    const handler = mockHandlers[`${method} ${path}`]
-    if (handler) {
-      if (method === 'GET') {
-        await new Promise((r) => setTimeout(r, 250))
-      }
-      const body = options.body ? JSON.parse(options.body) : {}
-      return handler(body, queryParams)
-    }
-    throw new Error(`Mock not found: ${method} ${path}`)
-  }
-
   const res = await fetch(`${BASE_URL}${url}`, {
     headers: {
       'Content-Type': 'application/json',
@@ -47,9 +49,10 @@ export async function request(url, options = {}) {
     },
     ...options,
   })
-  const json = await res.json()
+  const json = await res.json().catch(() => ({}))
+  if (res.status === 401 || json.code === 401) throw expireSession(json.message)
   if (json.code !== 200) throw new Error(json.message || '请求失败')
   return json.data
 }
 
-export { USE_MOCK, BASE_URL }
+export { BASE_URL }

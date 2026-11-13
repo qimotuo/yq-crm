@@ -23,3 +23,7 @@ export function createRole(data) {
 export function getPermissionsByRole(roleCode) {
   return request(`/system/permissions?role=${roleCode}`)
 }
+
+export function getDepartments() {
+  return request('/system/departments')
+}

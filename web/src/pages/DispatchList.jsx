@@ -6,14 +6,18 @@ import { getWorkOrders, dispatchWorkOrder, updateWorkOrderStatusWithReason, getI
 import { OrderStatusTag } from '../components/StatusTag'
 import ServiceOrderPrint from '../components/ServiceOrderPrint'
 import { Permission } from '../components/RequireAuth'
+import ExportButton from '../components/ExportButton'
 import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const statusSteps = ['待派工', '已派工', '安装中', '已安装', '已完成']
-const STATUS_OPTIONS = ['', '待派工', '已派工', '安装中', '已安装', '失败'].map((s) => ({ value: s, label: s || '全部状态' }))
+const STEP_ALIAS = { 安装成功: '安装中', 推迟安装: '已派工', 失败: '已派工' }
+const STATUS_OPTIONS = ['', '待派工', '已派工', '推迟安装', '安装中', '安装成功', '已安装', '失败'].map((s) => ({ value: s, label: s || '全部状态' }))
 
 export default function DispatchList() {
   const [loading, setLoading] = useState(true)
   const [data, setData] = useState([])
+  const { pagination } = useTablePagination(10, data.length)
   const [installers, setInstallers] = useState([])
   const [keyword, setKeyword] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -85,19 +89,21 @@ export default function DispatchList() {
       render: (_, record) => (
         <Space size="small" wrap>
           <Button type="link" size="small" icon={<EyeOutlined />} onClick={() => { setCurrent(record); setDetailModal(true) }}>详情</Button>
-          <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => { setCurrent(record); setPrintOpen(true) }}>打印</Button>
+          <Permission code="dispatch:print">
+            <Button type="link" size="small" icon={<PrinterOutlined />} onClick={() => { setCurrent(record); setPrintOpen(true) }}>打印</Button>
+          </Permission>
           {record.status === '待派工' && (
-            <Permission code="workorder:edit">
+            <Permission code="dispatch:edit">
               <Button type="link" size="small" icon={<EditOutlined />} onClick={() => openEdit(record)}>编辑</Button>
             </Permission>
           )}
           {(record.status === '待派工' || record.status === '失败') && (
-            <Permission code="workorder:dispatch">
+            <Permission code="dispatch:assign">
               <Button type="link" size="small" icon={<SendOutlined />} onClick={() => { setCurrent(record); form.setFieldsValue({ installer: record.installer }); setDispatchModal(true) }}>派工</Button>
             </Permission>
           )}
           {record.status === '已安装' && (
-            <Permission code="workorder:dispatch">
+            <Permission code="dispatch:confirm">
               <Button type="link" size="small" onClick={() => updateWorkOrderStatusWithReason(record.id, '已完成').then(() => { message.success('已确认完成'); load() })}>确认完成</Button>
             </Permission>
           )}
@@ -113,7 +119,7 @@ export default function DispatchList() {
         label: '基本信息',
         children: (
           <>
-            <Steps size="small" current={Math.max(0, statusSteps.indexOf(current.status))} style={{ margin: '8px 0 16px' }}
+            <Steps size="small" current={Math.max(0, statusSteps.indexOf(STEP_ALIAS[current.status] || current.status))} style={{ margin: '8px 0 16px' }}
               items={statusSteps.map((s) => ({ title: s }))} />
             <Descriptions column={2} bordered size="small">
               <Descriptions.Item label="工单号">{current.orderNo}</Descriptions.Item>
@@ -123,14 +129,15 @@ export default function DispatchList() {
               <Descriptions.Item label="客户">{current.customerName}</Descriptions.Item>
               <Descriptions.Item label="店名">{current.storeName}</Descriptions.Item>
               <Descriptions.Item label="联系人">{current.contact} / {current.contactPhone}</Descriptions.Item>
-              <Descriptions.Item label="预约日期">{current.installDate || '-'}</Descriptions.Item>
+              <Descriptions.Item label="预约日期">{current.installDate || current.installTimeSlot || '-'}</Descriptions.Item>
+              <Descriptions.Item label="价格">{current.price || '-'}</Descriptions.Item>
               <Descriptions.Item label="地址" span={2}>{current.address}</Descriptions.Item>
               <Descriptions.Item label="销售备注" span={2}>{current.remark || '-'}</Descriptions.Item>
               {current.failReason && <Descriptions.Item label="失败原因" span={2}>{current.failReason}</Descriptions.Item>}
               {current.mac && <>
                 <Descriptions.Item label="设备">{current.deviceSupplier} {current.deviceModel}</Descriptions.Item>
                 <Descriptions.Item label="MAC / IMEI">{current.mac} / {current.imei}</Descriptions.Item>
-                <Descriptions.Item label="SIM" span={2}>{current.operator} / {current.iccid || '-'}</Descriptions.Item>
+                <Descriptions.Item label="SIM" span={2}>{current.operator} / {current.iccid || '-'}{current.backupIccid ? ` / 备用 ${current.backupIccid}` : ''}</Descriptions.Item>
                 <Descriptions.Item label="安装备注" span={2}>{current.installRemark || '-'}</Descriptions.Item>
               </>}
             </Descriptions>
@@ -172,12 +179,17 @@ export default function DispatchList() {
           </>
         )}
         actions={(
-          <Permission code="workorder:create">
-            <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
-          </Permission>
+          <>
+            <Permission code="dispatch:create">
+              <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>新建工单</Button>
+            </Permission>
+            <Permission code="dispatch:export">
+              <ExportButton filename="dispatch.csv" label="导出" data={data} columns={columns} />
+            </Permission>
+          </>
         )}
       />
-      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 1200 }} pagination={{ pageSize: 10 }} />
+      <Table columns={columns} dataSource={data} rowKey="id" loading={loading} scroll={{ x: 1200 }} pagination={pagination} />
 
       <Modal title="派工" open={dispatchModal} onOk={handleDispatch} onCancel={() => setDispatchModal(false)} destroyOnClose>
         <p>工单：<strong>{current?.orderNo}</strong> — {current?.customerName}</p>

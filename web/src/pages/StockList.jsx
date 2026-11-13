@@ -6,20 +6,25 @@ import {
   getStockIn, getSimStockIn, getStockOut, createStockOut,
   createStockIn, updateStockIn, deleteStockIn, importStockIn,
   createSimStockIn, updateSimStockIn, deleteSimStockIn, importSimStockIn,
-  importStockOut,
+  importStockOut, getStockConfig, updateStockConfig,
 } from '../api'
 import { getWorkOrders } from '../api/workOrder'
 import { Permission } from '../components/RequireAuth'
+import ExportButton from '../components/ExportButton'
 import { ListToolbar, FilterInput, FilterSelect, QueryButton, ResetButton } from '../components/ListToolbar'
 import { useAuth } from '../hooks/useAuth'
 import { runClientQuery } from '../utils/listLoad'
+import FormColumnLayout, { modalFormWidth } from '../components/FormColumnLayout'
+import { downloadCsvTemplate, parseImportFile, IMPORT_ACCEPT } from '../utils/csvImport'
+import { useTablePagination } from '../hooks/useTablePagination'
 
 const DEVICE_TEMPLATE = {
   filename: '设备入库导入模板.csv',
-  headers: ['入库日期', '供应商', '设备型号', 'IMEI', 'MAC', '数量', '领用人', '备注'],
-  keys: ['inDate', 'supplier', 'model', 'imei', 'mac', 'qty', 'receiver', 'remark'],
-  sample: ['2026-10-27 10:30:00', '鲲鹏', '鲲鹏618', '865432041234567', 'AA:BB:CC:DD:EE:01', '10', '张三', '首批试点'],
+  headers: ['入库日期', '供应商', '设备型号', 'IMEI', 'MAC', '数量', '领用人', '备注', '店名', '关联工单', '移动卡号', '电信卡号', '已更换旧卡号'],
+  keys: ['inDate', 'supplier', 'model', 'imei', 'mac', 'qty', 'receiver', 'remark', 'storeName', 'orderNo', 'mobileNo', 'telecomNo', 'replacedCardNo'],
+  sample: ['2026-10-27 10:30:00', '鲲鹏', '鲲鹏618', '865432041234567', 'AA:BB:CC:DD:EE:01', '10', '张三', '首批试点', '华为正企', 'GD-20261025-088', '13800001111', '18900002222', ''],
   required: ['supplier', 'model', 'imei', 'mac'],
+  optional: ['店名', '关联工单', '移动卡号', '电信卡号', '已更换旧卡号'],
 }
 
 const SIM_TEMPLATE = {
@@ -32,10 +37,11 @@ const SIM_TEMPLATE = {
 
 const OUT_TEMPLATE = {
   filename: '设备出库导入模板.csv',
-  headers: ['出库日期', '工单号', '设备型号', 'IMEI', 'MAC', 'ICCID', 'ICCID2', '运营商', '领用人', '备注'],
-  keys: ['outDate', 'orderNo', 'model', 'imei', 'mac', 'iccid', 'iccid2', 'operator', 'receiver', 'remark'],
-  sample: ['2026-10-27 14:00:00', 'GD-20261025-088', '鲲鹏618', '865432041234567', 'AA:BB:CC:DD:EE:01', '89860123456789012345', '89860123456789012346', '中国移动', '张三', '首批试点安装'],
+  headers: ['出库日期', '工单号', '设备型号', 'IMEI', 'MAC', 'ICCID', 'ICCID2', '运营商', '领用人', '备注', '店名', '移动卡号', '电信卡号', '已更换旧卡号'],
+  keys: ['outDate', 'orderNo', 'model', 'imei', 'mac', 'iccid', 'iccid2', 'operator', 'receiver', 'remark', 'storeName', 'mobileNo', 'telecomNo', 'replacedCardNo'],
+  sample: ['2026-10-27 14:00:00', 'GD-20261025-088', '鲲鹏618', '865432041234567', 'AA:BB:CC:DD:EE:01', '89860123456789012345', '89860123456789012346', '中国移动', '张三', '首批试点安装', '华为正企', '13800001111', '18900002222', '13700003333'],
   required: ['orderNo', 'model', 'mac'],
+  optional: ['店名', '移动卡号', '电信卡号', '已更换旧卡号'],
 }
 
 const OPERATORS = ['中国移动', '中国电信', '中国联通']
@@ -69,11 +75,9 @@ const stockDateTimePickerProps = {
   needConfirm: false,
 }
 
-const EMPTY_IN_QUERY = { keyword: '', supplier: '', lowStock: false, dateRange: null }
+const EMPTY_IN_QUERY = { keyword: '', supplier: '', storeName: '', orderNo: '', lowStock: false, dateRange: null }
 const EMPTY_SIM_QUERY = { keyword: '', operator: '', lowStock: false, dateRange: null }
-const EMPTY_OUT_QUERY = { keyword: '', operator: '', dateRange: null }
-
-const TABLE_PAGE = { pageSize: 10, showSizeChanger: true, pageSizeOptions: ['10', '20', '50'], showTotal: (t) => `共 ${t} 条` }
+const EMPTY_OUT_QUERY = { keyword: '', operator: '', storeName: '', orderNo: '', dateRange: null }
 
 function fuzzyMatch(row, keyword, fields) {
   if (!keyword?.trim()) return true
@@ -94,45 +98,23 @@ function matchDateRange(dateStr, range) {
   return d >= start && d <= end
 }
 
-function ImportActions({ permission, template, onImport, addLabel, onAdd }) {
+function ImportActions({ addPermission, importPermission, exportPermission, template, onImport, addLabel, onAdd, exportFilename, exportData, exportColumns }) {
   return (
-    <Permission code={permission}>
-      <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>{addLabel}</Button>
-      <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(template)}>下载模板</Button>
-      <Upload showUploadList={false} accept=".csv" beforeUpload={onImport}>
-        <Button icon={<UploadOutlined />}>批量导入</Button>
-      </Upload>
-    </Permission>
+    <>
+      <Permission code={addPermission}>
+        <Button type="primary" icon={<PlusOutlined />} onClick={onAdd}>{addLabel}</Button>
+      </Permission>
+      <Permission code={importPermission}>
+        <Button icon={<DownloadOutlined />} onClick={() => downloadCsvTemplate(template)}>下载模板</Button>
+        <Upload showUploadList={false} accept={IMPORT_ACCEPT} beforeUpload={onImport}>
+          <Button icon={<UploadOutlined />}>批量导入</Button>
+        </Upload>
+      </Permission>
+      <Permission code={exportPermission}>
+        <ExportButton filename={exportFilename} data={exportData} columns={exportColumns} />
+      </Permission>
+    </>
   )
-}
-
-function downloadCsvTemplate(tpl) {
-  const bom = '\uFEFF'
-  const content = bom + [tpl.headers.join(','), tpl.sample.join(',')].join('\n')
-  const blob = new Blob([content], { type: 'text/csv;charset=utf-8' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = tpl.filename
-  a.click()
-}
-
-function parseCsvFile(text, tpl) {
-  const lines = text.replace(/^\uFEFF/, '').trim().split(/\r?\n/).filter(Boolean)
-  if (lines.length < 2) throw new Error('文件无数据行，请使用模板填写后导入')
-  const headers = lines[0].split(',').map((h) => h.trim())
-  const missing = tpl.headers.filter((h) => !headers.includes(h))
-  if (missing.length) throw new Error(`表头缺少列：${missing.join('、')}`)
-  return lines.slice(1).map((line, idx) => {
-    const cols = line.split(',').map((c) => c.trim())
-    const row = {}
-    tpl.headers.forEach((h, i) => {
-      const key = tpl.keys[tpl.headers.indexOf(h)]
-      row[key] = cols[i] || ''
-    })
-    const lacks = tpl.required.filter((k) => !row[k])
-    if (lacks.length) throw new Error(`第 ${idx + 2} 行缺少必填：${lacks.join('、')}`)
-    return row
-  })
 }
 
 export default function StockList() {
@@ -155,44 +137,74 @@ export default function StockList() {
   const [simQuery, setSimQuery] = useState(EMPTY_SIM_QUERY)
   const [outFilters, setOutFilters] = useState(EMPTY_OUT_QUERY)
   const [outQuery, setOutQuery] = useState(EMPTY_OUT_QUERY)
+  const [lowThreshold, setLowThreshold] = useState(5)
+  const [thrSaving, setThrSaving] = useState(false)
   const { user } = useAuth()
 
   const load = () => {
     setLoading(true)
-    Promise.all([getStockIn(), getSimStockIn(), getStockOut()])
-      .then(([inRes, simRes, outRes]) => {
+    Promise.all([getStockIn(), getSimStockIn(), getStockOut(), getStockConfig().catch(() => ({ lowThreshold: 5 }))])
+      .then(([inRes, simRes, outRes, cfg]) => {
         setInData(inRes.list)
         setSimData(simRes.list)
         setOutData(outRes.list)
+        const thr = Number(inRes.lowThreshold ?? simRes.lowThreshold ?? cfg?.lowThreshold ?? 5)
+        setLowThreshold(Number.isFinite(thr) ? thr : 5)
       })
       .finally(() => setLoading(false))
   }
 
   useEffect(() => { load(); getWorkOrders({}).then((r) => setOrders(r.list)) }, [])
 
-  const lowStock = simData.filter((s) => s.stockQty <= 5)
+  const lowStock = simData.filter((s) => s.stockQty <= lowThreshold)
+  const lowDeviceStock = inData.filter((s) => s.stockQty <= lowThreshold)
 
   const filteredInData = useMemo(() => inData.filter((row) => {
     if (!matchDateRange(row.inDate, inQuery.dateRange)) return false
     if (inQuery.supplier && row.supplier !== inQuery.supplier) return false
-    if (inQuery.lowStock && row.stockQty > 5) return false
-    return fuzzyMatch(row, inQuery.keyword, ['inNo', 'supplier', 'model', 'imei', 'mac', 'receiver', 'remark'])
-  }), [inData, inQuery])
+    if (inQuery.storeName && row.storeName !== inQuery.storeName) return false
+    if (inQuery.orderNo && row.orderNo !== inQuery.orderNo) return false
+    if (inQuery.lowStock && row.stockQty > lowThreshold) return false
+    return fuzzyMatch(row, inQuery.keyword, ['inNo', 'supplier', 'model', 'imei', 'mac', 'receiver', 'remark', 'storeName', 'orderNo', 'mobileNo', 'telecomNo', 'replacedCardNo'])
+  }), [inData, inQuery, lowThreshold])
 
   const filteredSimData = useMemo(() => simData.filter((row) => {
     if (!matchDateRange(row.inDate, simQuery.dateRange)) return false
     if (simQuery.operator && row.operator !== simQuery.operator) return false
-    if (simQuery.lowStock && row.stockQty > 5) return false
+    if (simQuery.lowStock && row.stockQty > lowThreshold) return false
     return fuzzyMatch(row, simQuery.keyword, ['inNo', 'supplier', 'operator', 'iccid', 'receiver', 'remark'])
-  }), [simData, simQuery])
+  }), [simData, simQuery, lowThreshold])
 
   const filteredOutData = useMemo(() => outData.filter((row) => {
     if (!matchDateRange(row.outDate, outQuery.dateRange)) return false
     if (outQuery.operator && row.operator !== outQuery.operator) return false
-    return fuzzyMatch(row, outQuery.keyword, ['outNo', 'orderNo', 'storeName', 'customerName', 'model', 'imei', 'mac', 'iccid', 'iccid2', 'receiver', 'remark'])
+    if (outQuery.storeName && row.storeName !== outQuery.storeName) return false
+    if (outQuery.orderNo && row.orderNo !== outQuery.orderNo) return false
+    return fuzzyMatch(row, outQuery.keyword, ['outNo', 'orderNo', 'storeName', 'customerName', 'model', 'imei', 'mac', 'iccid', 'iccid2', 'receiver', 'remark', 'mobileNo', 'telecomNo', 'replacedCardNo'])
   }), [outData, outQuery])
+  const inPagination = useTablePagination(10, filteredInData.length).pagination
+  const simPagination = useTablePagination(10, filteredSimData.length).pagination
+  const outPagination = useTablePagination(10, filteredOutData.length).pagination
 
   const inSupplierOptions = useMemo(() => uniqueOptions(inData, 'supplier'), [inData])
+  const inStoreOptions = useMemo(() => uniqueOptions(inData, 'storeName'), [inData])
+  const inOrderOptions = useMemo(() => uniqueOptions(inData, 'orderNo'), [inData])
+  const outStoreOptions = useMemo(() => uniqueOptions(outData, 'storeName'), [outData])
+  const outOrderOptions = useMemo(() => uniqueOptions(outData, 'orderNo'), [outData])
+  const orderOptions = useMemo(() => orders.map((o) => ({
+    value: o.orderNo,
+    label: [o.orderNo, o.storeName, o.customerName].filter(Boolean).join(' · '),
+  })), [orders])
+
+  const fillStoreByOrder = (form, orderNo) => {
+    const order = orders.find((o) => o.orderNo === orderNo)
+    if (!order) return
+    form.setFieldsValue({
+      storeName: order.storeName || '',
+      customerName: order.customerName || '',
+      address: order.address || '',
+    })
+  }
 
   const defaultInValues = () => ({
     inDate: dayjs(),
@@ -203,6 +215,11 @@ export default function StockList() {
     qty: 1,
     receiver: user?.name || '',
     remark: '',
+    storeName: '',
+    orderNo: undefined,
+    mobileNo: '',
+    telecomNo: '',
+    replacedCardNo: '',
   })
 
   const defaultSimValues = () => ({
@@ -216,8 +233,6 @@ export default function StockList() {
   })
 
   const openOut = () => {
-    outForm.resetFields()
-    outForm.setFieldsValue({ outDate: dayjs() })
     setOutModalOpen(true)
   }
 
@@ -232,9 +247,9 @@ export default function StockList() {
     await createStockOut({
       ...values,
       outDate: formatStockDatetime(values.outDate),
-      storeName: order?.storeName || '',
-      customerName: order?.customerName || '',
-      address: order?.address || '',
+      storeName: values.storeName || order?.storeName || '',
+      customerName: values.customerName || order?.customerName || '',
+      address: values.address || order?.address || '',
       receiver: values.receiver || user.name || '张三',
     })
     message.success('出库成功，库存已扣减')
@@ -244,8 +259,7 @@ export default function StockList() {
 
   const handleOutImport = async (file) => {
     try {
-      const text = await file.text()
-      const rows = parseCsvFile(text, OUT_TEMPLATE)
+      const rows = await parseImportFile(file, OUT_TEMPLATE)
       const res = await importStockOut(rows)
       message.success(`成功导入 ${res.count} 条出库记录`)
       load()
@@ -257,13 +271,16 @@ export default function StockList() {
 
   const openInEdit = (record) => {
     setCurrentIn(record)
+    setInModalOpen(true)
+  }
+
+  const fillInForm = (record) => {
     if (record?.id) {
-      inForm.setFieldsValue({ ...record, inDate: toStockDayjs(record.inDate) || dayjs() })
+      inForm.setFieldsValue({ ...record, inDate: toStockDayjs(record.inDate) || dayjs(), orderNo: record.orderNo || undefined })
     } else {
       inForm.resetFields()
       inForm.setFieldsValue(defaultInValues())
     }
-    setInModalOpen(true)
   }
 
   const closeInModal = () => {
@@ -294,8 +311,7 @@ export default function StockList() {
 
   const handleInImport = async (file) => {
     try {
-      const text = await file.text()
-      const rows = parseCsvFile(text, DEVICE_TEMPLATE)
+      const rows = await parseImportFile(file, DEVICE_TEMPLATE)
       const res = await importStockIn(rows)
       message.success(`成功导入 ${res.count} 条设备入库记录`)
       load()
@@ -307,13 +323,16 @@ export default function StockList() {
 
   const openSimEdit = (record) => {
     setCurrentSim(record)
+    setSimModalOpen(true)
+  }
+
+  const fillSimForm = (record) => {
     if (record?.id) {
       simForm.setFieldsValue({ ...record, inDate: toStockDayjs(record.inDate) || dayjs() })
     } else {
       simForm.resetFields()
       simForm.setFieldsValue(defaultSimValues())
     }
-    setSimModalOpen(true)
   }
 
   const closeSimModal = () => {
@@ -344,8 +363,7 @@ export default function StockList() {
 
   const handleSimImport = async (file) => {
     try {
-      const text = await file.text()
-      const rows = parseCsvFile(text, SIM_TEMPLATE)
+      const rows = await parseImportFile(file, SIM_TEMPLATE)
       const res = await importSimStockIn(rows)
       message.success(`成功导入 ${res.count} 条 SIM 卡入库记录`)
       load()
@@ -355,17 +373,19 @@ export default function StockList() {
     return false
   }
 
-  const actionCol = (onEdit, onDelete) => ({
+  const actionCol = (onEdit, onDelete, editCode, deleteCode) => ({
     title: '操作', width: 130, fixed: 'right',
     render: (_, r) => (
-      <Permission code="stock:in">
-        <Space size={0}>
+      <Space size={0}>
+        <Permission code={editCode}>
           <Button type="link" size="small" icon={<EditOutlined />} onClick={() => onEdit(r)}>编辑</Button>
+        </Permission>
+        <Permission code={deleteCode}>
           <Popconfirm title="确认删除该入库记录？" onConfirm={() => onDelete(r.id)}>
             <Button type="link" size="small" danger icon={<DeleteOutlined />}>删除</Button>
           </Popconfirm>
-        </Space>
-      </Permission>
+        </Permission>
+      </Space>
     ),
   })
 
@@ -374,13 +394,18 @@ export default function StockList() {
     { title: '入库时间', dataIndex: 'inDate', width: 170 },
     { title: '供应商', dataIndex: 'supplier', width: 80 },
     { title: '设备型号', dataIndex: 'model', width: 100 },
+    { title: '店名', dataIndex: 'storeName', width: 120, render: (v) => v || '-' },
+    { title: '关联工单', dataIndex: 'orderNo', width: 160, render: (v) => v || '-' },
     { title: 'IMEI', dataIndex: 'imei', width: 150 },
     { title: 'MAC', dataIndex: 'mac', width: 150 },
+    { title: '移动卡号', dataIndex: 'mobileNo', width: 130, render: (v) => v || '-' },
+    { title: '电信卡号', dataIndex: 'telecomNo', width: 130, render: (v) => v || '-' },
+    { title: '已更换旧卡号', dataIndex: 'replacedCardNo', width: 140, render: (v) => v || '-' },
     { title: '数量', dataIndex: 'qty', width: 60 },
-    { title: '仓库剩余数量', dataIndex: 'stockQty', width: 110, render: (v) => v <= 5 ? <Tag color="error">{v}</Tag> : v },
+    { title: '仓库剩余数量', dataIndex: 'stockQty', width: 110, render: (v) => v <= lowThreshold ? <Tag color="error">{v}</Tag> : v },
     { title: '领用人', dataIndex: 'receiver', width: 80 },
     { title: '备注', dataIndex: 'remark', ellipsis: true },
-    actionCol(openInEdit, handleInDelete),
+    actionCol(openInEdit, handleInDelete, 'stock:in:edit', 'stock:in:delete'),
   ]
 
   const simColumns = [
@@ -389,19 +414,22 @@ export default function StockList() {
     { title: '运营商', dataIndex: 'operator', width: 100 },
     { title: 'ICCID', dataIndex: 'iccid', width: 200 },
     { title: '数量', dataIndex: 'qty', width: 60 },
-    { title: '库存余量', dataIndex: 'stockQty', width: 90, render: (v) => v <= 5 ? <Tag color="error">{v} ⚠️</Tag> : v },
+    { title: '库存余量', dataIndex: 'stockQty', width: 90, render: (v) => v <= lowThreshold ? <Tag color="error">{v} ⚠️</Tag> : v },
     { title: '领用人', dataIndex: 'receiver', width: 80 },
     { title: '备注', dataIndex: 'remark', ellipsis: true },
-    actionCol(openSimEdit, handleSimDelete),
+    actionCol(openSimEdit, handleSimDelete, 'stock:sim:edit', 'stock:sim:delete'),
   ]
 
   const outColumns = [
     { title: '出库单号', dataIndex: 'outNo', width: 150 },
     { title: '出库时间', dataIndex: 'outDate', width: 170 },
     { title: '工单号', dataIndex: 'orderNo', width: 160 },
-    { title: '客户门店', dataIndex: 'storeName', width: 120 },
+    { title: '店名', dataIndex: 'storeName', width: 120, render: (v) => v || '-' },
     { title: '设备型号', dataIndex: 'model', width: 100 },
     { title: 'MAC', dataIndex: 'mac', width: 150 },
+    { title: '移动卡号', dataIndex: 'mobileNo', width: 130, render: (v) => v || '-' },
+    { title: '电信卡号', dataIndex: 'telecomNo', width: 130, render: (v) => v || '-' },
+    { title: '已更换旧卡号', dataIndex: 'replacedCardNo', width: 140, render: (v) => v || '-' },
     { title: 'ICCID', dataIndex: 'iccid', width: 180 },
     { title: 'ICCID2', dataIndex: 'iccid2', width: 180, render: (v) => v || '-' },
     { title: '运营商', dataIndex: 'operator', width: 100 },
@@ -437,7 +465,7 @@ export default function StockList() {
       filters={(
         <>
           <FilterInput
-            placeholder="搜索单号/型号/IMEI/MAC/供应商"
+            placeholder="搜索单号/店名/工单/型号/IMEI/MAC/卡号"
             value={inFilters.keyword}
             onChange={(e) => setInFilters((f) => ({ ...f, keyword: e.target.value }))}
             onPressEnter={() => setInQuery({ ...inFilters })}
@@ -447,6 +475,22 @@ export default function StockList() {
             value={inFilters.supplier || undefined}
             onChange={(v) => applyInFilters({ supplier: v || '' })}
             options={inSupplierOptions}
+          />
+          <FilterSelect
+            placeholder="店名"
+            showSearch
+            optionFilterProp="label"
+            value={inFilters.storeName || undefined}
+            onChange={(v) => applyInFilters({ storeName: v || '' })}
+            options={inStoreOptions}
+          />
+          <FilterSelect
+            placeholder="关联工单"
+            showSearch
+            optionFilterProp="label"
+            value={inFilters.orderNo || undefined}
+            onChange={(v) => applyInFilters({ orderNo: v || '' })}
+            options={inOrderOptions}
           />
           <DatePicker.RangePicker
             className="stock-filter-date"
@@ -469,11 +513,16 @@ export default function StockList() {
       )}
       actions={(
         <ImportActions
-          permission="stock:in"
+          addPermission="stock:in"
+          importPermission="stock:in:import"
+          exportPermission="stock:in:export"
           template={DEVICE_TEMPLATE}
           onImport={handleInImport}
           addLabel="新增入库"
           onAdd={() => openInEdit(null)}
+          exportFilename="stock-in.csv"
+          exportData={filteredInData}
+          exportColumns={inColumns}
         />
       )}
     />
@@ -516,11 +565,16 @@ export default function StockList() {
       )}
       actions={(
         <ImportActions
-          permission="stock:in"
+          addPermission="stock:sim"
+          importPermission="stock:sim:import"
+          exportPermission="stock:sim:export"
           template={SIM_TEMPLATE}
           onImport={handleSimImport}
           addLabel="新增入库"
           onAdd={() => openSimEdit(null)}
+          exportFilename="sim-stock-in.csv"
+          exportData={filteredSimData}
+          exportColumns={simColumns}
         />
       )}
     />
@@ -531,10 +585,26 @@ export default function StockList() {
       filters={(
         <>
           <FilterInput
-            placeholder="搜索单号/工单/门店/客户/MAC/ICCID"
+            placeholder="搜索单号/工单/店名/客户/MAC/卡号"
             value={outFilters.keyword}
             onChange={(e) => setOutFilters((f) => ({ ...f, keyword: e.target.value }))}
             onPressEnter={() => setOutQuery({ ...outFilters })}
+          />
+          <FilterSelect
+            placeholder="店名"
+            showSearch
+            optionFilterProp="label"
+            value={outFilters.storeName || undefined}
+            onChange={(v) => applyOutFilters({ storeName: v || '' })}
+            options={outStoreOptions}
+          />
+          <FilterSelect
+            placeholder="关联工单"
+            showSearch
+            optionFilterProp="label"
+            value={outFilters.orderNo || undefined}
+            onChange={(v) => applyOutFilters({ orderNo: v || '' })}
+            options={outOrderOptions}
           />
           <FilterSelect
             placeholder="运营商"
@@ -555,11 +625,16 @@ export default function StockList() {
       )}
       actions={(
         <ImportActions
-          permission="stock:out"
+          addPermission="stock:out"
+          importPermission="stock:out:import"
+          exportPermission="stock:out:export"
           template={OUT_TEMPLATE}
           onImport={handleOutImport}
           addLabel="新增出库"
           onAdd={openOut}
+          exportFilename="stock-out.csv"
+          exportData={filteredOutData}
+          exportColumns={outColumns}
         />
       )}
     />
@@ -571,7 +646,7 @@ export default function StockList() {
       children: (
         <>
           {inToolbar}
-          <Table columns={inColumns} dataSource={filteredInData} rowKey="id" loading={loading} scroll={{ x: 1300 }} pagination={TABLE_PAGE} />
+          <Table columns={inColumns} dataSource={filteredInData} rowKey="id" loading={loading} scroll={{ x: 2100 }} pagination={{ ...inPagination, showTotal: (t) => `共 ${t} 条` }} />
         </>
       ),
     },
@@ -580,43 +655,109 @@ export default function StockList() {
       label: <span>SIM 卡入库 {lowStock.length > 0 && <Tag color="error">{lowStock.length} 项预警</Tag>}</span>,
       children: (
         <>
-          {lowStock.length > 0 && <Alert type="warning" message={`${lowStock.length} 项 SIM 卡库存低于阈值（≤5）`} style={{ marginBottom: 16 }} showIcon />}
+          {lowStock.length > 0 && <Alert type="warning" message={`${lowStock.length} 项 SIM 卡库存低于阈值（≤${lowThreshold}）`} style={{ marginBottom: 16 }} showIcon />}
           {simToolbar}
-          <Table columns={simColumns} dataSource={filteredSimData} rowKey="id" loading={loading} scroll={{ x: 1100 }} pagination={TABLE_PAGE} />
+          <Table columns={simColumns} dataSource={filteredSimData} rowKey="id" loading={loading} scroll={{ x: 1100 }} pagination={{ ...simPagination, showTotal: (t) => `共 ${t} 条` }} />
         </>
       ),
     },
     { key: 'out', label: '设备出库', children: (
       <>
         {outToolbar}
-        <Table columns={outColumns} dataSource={filteredOutData} rowKey="id" loading={loading} scroll={{ x: 1380 }} pagination={TABLE_PAGE} />
+        <Table columns={outColumns} dataSource={filteredOutData} rowKey="id" loading={loading} scroll={{ x: 2100 }} pagination={{ ...outPagination, showTotal: (t) => `共 ${t} 条` }} />
       </>
     ) },
   ]
 
+  const saveThreshold = async (value) => {
+    const thr = Number(value)
+    if (!Number.isFinite(thr) || thr < 0) {
+      message.error('阈值需为非负整数')
+      return
+    }
+    setThrSaving(true)
+    try {
+      const data = await updateStockConfig({ lowThreshold: thr })
+      setLowThreshold(data.lowThreshold)
+      message.success(`预警阈值已更新为 ≤${data.lowThreshold}`)
+    } catch (e) {
+      message.error(e.message || '保存失败')
+    } finally {
+      setThrSaving(false)
+    }
+  }
+
   return (
     <div>
-      <div className="page-header">
-        <h2>设备出入库</h2>
-        <p>入库、出库关联工单，库存自动扣减</p>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+        <div>
+          <h2>设备出入库</h2>
+          <p>入库、出库关联工单，库存自动扣减
+            {(lowDeviceStock.length + lowStock.length) > 0 && (
+              <Tag color="error" style={{ marginLeft: 8 }}>
+                设备 {lowDeviceStock.length} / SIM {lowStock.length} 项低于 ≤{lowThreshold}
+              </Tag>
+            )}
+          </p>
+        </div>
+        <Permission code="stock:config">
+          <Space>
+            <span style={{ color: '#666' }}>预警阈值</span>
+            <InputNumber
+              min={0}
+              max={9999}
+              value={lowThreshold}
+              disabled={thrSaving}
+              onChange={(v) => setLowThreshold(v ?? 0)}
+              onPressEnter={() => saveThreshold(lowThreshold)}
+            />
+            <Button loading={thrSaving} onClick={() => saveThreshold(lowThreshold)}>保存</Button>
+          </Space>
+        </Permission>
       </div>
       <Tabs items={items} />
 
-      <Modal title="新增出库单" open={outModalOpen} onOk={handleOut} onCancel={closeOutModal} width={560} destroyOnClose>
+      <Modal
+        title="新增出库单"
+        open={outModalOpen}
+        onOk={handleOut}
+        onCancel={closeOutModal}
+        width={modalFormWidth(12)}
+        destroyOnClose
+        afterOpenChange={(opened) => {
+          if (!opened) return
+          outForm.resetFields()
+          outForm.setFieldsValue({ outDate: dayjs() })
+        }}
+      >
         <Form form={outForm} layout="vertical" style={{ marginTop: 16 }} preserve={false}>
+          <FormColumnLayout>
           <Form.Item name="outDate" label="出库时间" rules={[{ required: true }]}>
             <DatePicker {...stockDateTimePickerProps} placeholder="选择出库时间" />
           </Form.Item>
           <Form.Item name="orderNo" label="关联工单" rules={[{ required: true }]}>
-            <Select placeholder="选择工单" showSearch options={orders.map((o) => ({ value: o.orderNo, label: `${o.orderNo} - ${o.customerName}` }))} />
+            <Select
+              placeholder="按工单号/店名搜索"
+              showSearch
+              optionFilterProp="label"
+              options={orderOptions}
+              onChange={(orderNo) => fillStoreByOrder(outForm, orderNo)}
+            />
           </Form.Item>
+          <Form.Item name="storeName" label="店名"><Input placeholder="选择工单后自动带出，可改" /></Form.Item>
           <Form.Item name="model" label="设备型号" rules={[{ required: true }]}><Input placeholder="鲲鹏618" /></Form.Item>
           <Form.Item name="mac" label="MAC" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="imei" label="IMEI"><Input /></Form.Item>
+          <Form.Item name="mobileNo" label="移动卡号"><Input placeholder="中国移动卡号" /></Form.Item>
+          <Form.Item name="telecomNo" label="电信卡号"><Input placeholder="中国电信卡号" /></Form.Item>
+          <Form.Item name="replacedCardNo" label="已更换旧卡号"><Input placeholder="换卡前的旧卡号" /></Form.Item>
           <Form.Item name="iccid" label="ICCID"><Input /></Form.Item>
           <Form.Item name="iccid2" label="ICCID2"><Input /></Form.Item>
           <Form.Item name="operator" label="运营商">
             <Select options={OPERATORS.map((v) => ({ value: v, label: v }))} />
           </Form.Item>
+          <Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item>
+          </FormColumnLayout>
         </Form>
       </Modal>
 
@@ -625,21 +766,38 @@ export default function StockList() {
         open={inModalOpen}
         onOk={handleInSave}
         onCancel={closeInModal}
-        width={560}
+        width={modalFormWidth(14)}
         destroyOnClose
+        afterOpenChange={(opened) => { if (opened) fillInForm(currentIn) }}
       >
         <Form form={inForm} layout="vertical" style={{ marginTop: 16 }} preserve={false}>
+          <FormColumnLayout>
           {currentIn?.inNo && <Form.Item label="入库单号"><Input value={currentIn.inNo} disabled /></Form.Item>}
           <Form.Item name="inDate" label="入库时间" rules={[{ required: true }]}>
             <DatePicker {...stockDateTimePickerProps} placeholder="选择入库时间" />
           </Form.Item>
           <Form.Item name="supplier" label="供应商" rules={[{ required: true }]}><Input placeholder="鲲鹏、云软" /></Form.Item>
           <Form.Item name="model" label="设备型号" rules={[{ required: true }]}><Input placeholder="鲲鹏618" /></Form.Item>
+          <Form.Item name="orderNo" label="关联工单">
+            <Select
+              allowClear
+              placeholder="按工单号/店名搜索"
+              showSearch
+              optionFilterProp="label"
+              options={orderOptions}
+              onChange={(orderNo) => fillStoreByOrder(inForm, orderNo)}
+            />
+          </Form.Item>
+          <Form.Item name="storeName" label="店名"><Input placeholder="选择工单后自动带出，可改" /></Form.Item>
           <Form.Item name="imei" label="IMEI" rules={[{ required: true }]}><Input /></Form.Item>
           <Form.Item name="mac" label="MAC" rules={[{ required: true }]}><Input /></Form.Item>
+          <Form.Item name="mobileNo" label="移动卡号"><Input placeholder="中国移动卡号" /></Form.Item>
+          <Form.Item name="telecomNo" label="电信卡号"><Input placeholder="中国电信卡号" /></Form.Item>
+          <Form.Item name="replacedCardNo" label="已更换旧卡号"><Input placeholder="换卡前的旧卡号" /></Form.Item>
           <Form.Item name="qty" label="数量" rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="receiver" label="领用人"><Input /></Form.Item>
           <Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item>
+          </FormColumnLayout>
         </Form>
       </Modal>
 
@@ -648,10 +806,12 @@ export default function StockList() {
         open={simModalOpen}
         onOk={handleSimSave}
         onCancel={closeSimModal}
-        width={560}
+        width={modalFormWidth(7)}
         destroyOnClose
+        afterOpenChange={(opened) => { if (opened) fillSimForm(currentSim) }}
       >
         <Form form={simForm} layout="vertical" style={{ marginTop: 16 }} preserve={false}>
+          <FormColumnLayout>
           {currentSim?.inNo && <Form.Item label="入库单号"><Input value={currentSim.inNo} disabled /></Form.Item>}
           <Form.Item name="inDate" label="入库时间" rules={[{ required: true }]}>
             <DatePicker {...stockDateTimePickerProps} placeholder="选择入库时间" />
@@ -664,6 +824,7 @@ export default function StockList() {
           <Form.Item name="qty" label="数量" rules={[{ required: true }]}><InputNumber min={1} style={{ width: '100%' }} /></Form.Item>
           <Form.Item name="receiver" label="领用人"><Input /></Form.Item>
           <Form.Item name="remark" label="备注"><Input.TextArea rows={2} /></Form.Item>
+          </FormColumnLayout>
         </Form>
       </Modal>
     </div>
